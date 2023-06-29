@@ -2860,14 +2860,19 @@ struct printdirentrydata {
 static void printdirentry(const char *name, void *userdata) {
   struct printdirentrydata *d = (struct printdirentrydata *) userdata;
   struct mg_fs *fs = d->opts->fs == NULL ? &mg_fs_posix : d->opts->fs;
-  size_t size = 0;
+  size_t size = strlen(d->dir);
   time_t t = 0;
   char path[MG_PATH_MAX], sz[40], mod[40];
   int flags, n = 0;
 
   // MG_DEBUG(("[%s] [%s]", d->dir, name));
-  if (mg_snprintf(path, sizeof(path), "%s%c%s", d->dir, '/', name) >
-      sizeof(path)) {
+  if (d->dir[size - 1] == '/') {
+      size = mg_snprintf(path, sizeof(path), "%s%s", d->dir, name);
+  } else {
+      size = mg_snprintf(path, sizeof(path), "%s%c%s", d->dir, '/', name);
+  }
+
+  if (size > sizeof(path)) {
     MG_ERROR(("%s truncated", name));
   } else if ((flags = fs->st(path, &size, &t)) == 0) {
     MG_ERROR(("%lu stat(%s): %d", d->c->id, path, errno));
@@ -2953,6 +2958,14 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
             "  <tr><td><a href=\"..\">..</a></td>"
             "<td name=-1></td><td name=-1>[DIR]</td></tr>\n");
 
+#if MG_ARCH == MG_ARCH_NX
+  n = strlen(dir);
+  if ((n == 5 && strncmp(dir, "sdmc:", 5) == 0) || (n == 6 && strncmp(dir, "romfs:", 6) == 0)) {
+    // Add a trailing slash
+    dir[n++] = '/';
+    dir[n] = '\0';
+  }
+#endif
   fs->ls(dir, printdirentry, &d);
   mg_printf(c,
             "</tbody><tfoot><tr><td colspan=\"3\"><hr></td></tr></tfoot>"
@@ -3045,6 +3058,7 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
   char path[MG_PATH_MAX];
   const char *sp = opts->ssi_pattern;
   int flags = uri_to_path(c, hm, opts, path, sizeof(path));
+
   if (flags < 0) {
     // Do nothing: the response has already been sent by uri_to_path()
   } else if (flags & MG_FS_DIR) {
