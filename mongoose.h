@@ -249,24 +249,25 @@ static inline int mg_mkdir(const char *path, mode_t mode) {
 #ifndef _POSIX_TIMERS
 #define _POSIX_TIMERS
 #endif
+#include <arpa/inet.h>
 #include <ctype.h>
+#include <dirent.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <poll.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
-#include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
-#include <fcntl.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <poll.h>
-#include <dirent.h>
 
 #define MG_PATH_MAX NAME_MAX
 #define MG_ENABLE_POLL 1
