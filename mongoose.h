@@ -521,6 +521,8 @@ typedef int socklen_t;
 #define SO_EXCLUSIVEADDRUSE ((int) (~SO_REUSEADDR))
 #endif
 
+#undef SO_EXCLUSIVEADDRUSE
+
 #define MG_SOCK_ERR(errcode) ((errcode) < 0 ? WSAGetLastError() : 0)
 
 #define MG_SOCK_PENDING(errcode)                                            \
