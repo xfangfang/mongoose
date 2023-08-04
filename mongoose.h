@@ -44,6 +44,7 @@ extern "C" {
 #define MG_ARCH_RTTHREAD 14    // RT-Thread RTOS
 
 #define MG_ARCH_NX 10086       // Nintendo Switch
+#define MG_ARCH_VITA 10010     // PSVita
 
 #if !defined(MG_ARCH)
 #if defined(__unix__) || defined(__APPLE__)
@@ -52,6 +53,8 @@ extern "C" {
 #define MG_ARCH MG_ARCH_WIN32
 #elif defined(__SWITCH__)
 #define MG_ARCH MG_ARCH_NX
+#elif defined(__PSV__)
+#define MG_ARCH MG_ARCH_PSV
 #endif
 #endif  // !defined(MG_ARCH)
 
@@ -262,6 +265,45 @@ static inline int mg_mkdir(const char *path, mode_t mode) {
 
 #endif
 
+#if MG_ARCH == MG_ARCH_VITA
+#ifndef _POSIX_TIMERS
+#define _POSIX_TIMERS
+#endif
+
+#include <ctype.h>
+#include <errno.h>
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <time.h>
+#include <unistd.h>
+
+#include <psp2/net/net.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+#include <inttypes.h>
+#include <sys/socket.h>
+#include <sys/poll.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <netdb.h>
+
+#define MG_PATH_MAX 100
+
+#define MG_ENABLE_POLL 1
+#define MG_ENABLE_SOCKET 1
+#define MG_ENABLE_DIRLIST 0
+
+#endif
 
 #if MG_ARCH == MG_ARCH_RP2040
 #include <errno.h>
