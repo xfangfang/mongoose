@@ -1672,6 +1672,12 @@ int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {
     hm->message.len = (size_t) req_len + hm->body.len;
   }
 
+  if (mg_http_get_header(hm, "Sec-WebSocket-Key1") != NULL &&
+      mg_http_get_header(hm, "Sec-WebSocket-Key2") != NULL) {
+    hm->body.len = 8;
+    hm->message.len = (size_t) req_len + hm->body.len;
+  }
+
   // mg_http_parse() is used to parse both HTTP requests and HTTP
   // responses. If HTTP response does not have Content-Length set, then
   // body is read until socket is closed, i.e. body.len is infinite (~0).
@@ -2411,6 +2417,8 @@ static void http_cb(struct mg_connection *c, int ev, void *ev_data) {
           mg_error(c, "Invalid Transfer-Encoding");  // See #2460
           return;
         }
+      } else if (mg_http_get_header(&hm, "Sec-WebSocket-Key1") != NULL &&
+                 mg_http_get_header(&hm, "Sec-WebSocket-Key2") != NULL) {
       } else if (mg_http_get_header(&hm, "Content-length") == NULL) {
         // #2593: HTTP packets must contain either Transfer-Encoding or
         // Content-length
@@ -19190,6 +19198,57 @@ static void ws_handshake(struct mg_connection *c, const struct mg_str *wskey,
   mg_send(c, "\r\n", 2);
 }
 
+static uint32_t ws_handshake_key(const struct mg_str *wskey) {
+    char buffer[32];
+    size_t index = 0;
+    uint32_t num = 0, space = 0;
+    for (size_t i = 0; i < wskey->len; i++) {
+        if (isdigit(wskey->buf[i])) {
+            buffer[index++] = wskey->buf[i];
+        } else if (isspace(wskey->buf[i])) {
+            space++;
+        }
+    }
+    if (space == 0)
+        return 0;
+    buffer[index] = '\0';
+    num = strtoul(buffer, NULL, 10);
+    return num / space;
+}
+
+static void ws_handshake_76(struct mg_connection *c, const struct mg_str *wskey1,
+                            const struct mg_str *wskey2, const struct mg_str *skey,
+                            const struct mg_str *origin, const struct mg_str *host,
+                            const struct mg_str *uri, const char *fmt, va_list *ap) {
+    unsigned char md5[16];
+    uint32_t num1, num2;
+
+    num1 = htonl(ws_handshake_key(wskey1));
+    num2 = htonl(ws_handshake_key(wskey2));
+
+    mg_md5_ctx md5_ctx;
+    mg_md5_init(&md5_ctx);
+    mg_md5_update(&md5_ctx, (unsigned char *) &num1, 4);
+    mg_md5_update(&md5_ctx, (unsigned char *) &num2, 4);
+    mg_md5_update(&md5_ctx, (unsigned char *) skey->buf, 8);
+    mg_md5_final(&md5_ctx, md5);
+
+    mg_xprintf(mg_pfn_iobuf, &c->send,
+               "HTTP/1.1 101 Switching Protocols\r\n"
+               "Upgrade: websocket\r\n"
+               "Connection: Upgrade\r\n"
+               "Sec-WebSocket-Origin: %.*s\r\n"
+               "Sec-WebSocket-Location: ws://%.*s%.*s\r\n"
+               "\r\n",
+               (int) origin->len, origin->buf,
+               (int) host->len, host->buf,
+               (int) uri->len, uri->buf);
+    if (fmt != NULL) mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, ap);
+    for (size_t i = 0; i < sizeof(md5); i++) {
+        mg_pfn_iobuf((char) md5[i], &c->send);
+    }
+}
+
 static uint32_t be32(const uint8_t *p) {
   return (((uint32_t) p[3]) << 0) | (((uint32_t) p[2]) << 8) |
          (((uint32_t) p[1]) << 16) | (((uint32_t) p[0]) << 24);
@@ -19264,11 +19323,21 @@ static void mg_ws_mask(struct mg_connection *c, size_t len) {
 size_t mg_ws_send(struct mg_connection *c, const void *buf, size_t len,
                   int op) {
   uint8_t header[14];
-  size_t header_len = mkhdr(len, op, c->is_client, header);
-  if (!mg_send(c, header, header_len)) return 0;
-  if (!mg_send(c, buf, len)) return header_len;
-  MG_VERBOSE(("WS out: %d [%.*s]", (int) len, (int) len, buf));
-  mg_ws_mask(c, len);
+  size_t header_len = 0;
+  if (c->is_ws_76) {
+    header_len = 2;
+    header[0] = 0;
+    if (!mg_send(c, header, 1)) return 0;
+    if (!mg_send(c, buf, len)) return 1;
+    header[0] = 0xff;
+    if (!mg_send(c, header, 1)) return len + 1;
+  } else {
+    header_len = mkhdr(len, op, c->is_client, header);
+    if (!mg_send(c, header, header_len)) return 0;
+    if (!mg_send(c, buf, len)) return header_len;
+    MG_VERBOSE(("WS out: %d [%.*s]", (int) len, (int) len, buf));
+    mg_ws_mask(c, len);
+  }
   return header_len + len;
 }
 
@@ -19302,6 +19371,13 @@ static void mg_ws_cb(struct mg_connection *c, int ev, void *ev_data) {
   // assert(ofs < c->recv.len);
   if (ev == MG_EV_READ) {
     if (c->is_client && !c->is_websocket && mg_ws_client_handshake(c)) return;
+    if (c->is_ws_76) {
+      if (c->recv.buf[0] != 0 || c->recv.buf[c->recv.len - 1] != 0xff) return;
+      struct mg_ws_message m = {{(char *) (c->recv.buf + 1), c->recv.len - 2}, 0};
+      mg_call(c, MG_EV_WS_MSG, &m);
+      mg_iobuf_del(&c->recv, 0, c->recv.len);
+      return;
+    }
 
     while (ws_process(c->recv.buf + ofs, c->recv.len - ofs, &msg) > 0) {
       char *s = (char *) c->recv.buf + ofs + msg.header_len;
@@ -19397,9 +19473,22 @@ struct mg_connection *mg_ws_connect(struct mg_mgr *mgr, const char *url,
 void mg_ws_upgrade(struct mg_connection *c, struct mg_http_message *hm,
                    const char *fmt, ...) {
   struct mg_str *wskey = mg_http_get_header(hm, "Sec-WebSocket-Key");
+  struct mg_str *wskey1 = mg_http_get_header(hm, "Sec-WebSocket-Key1");
+  struct mg_str *wskey2 = mg_http_get_header(hm, "Sec-WebSocket-Key2");
   c->pfn = mg_ws_cb;
   c->pfn_data = NULL;
-  if (wskey == NULL) {
+  if (wskey1 != NULL && wskey2 != NULL) {
+    struct mg_str *origin = mg_http_get_header(hm, "Origin");
+    struct mg_str *host = mg_http_get_header(hm, "Host");
+    va_list ap;
+    va_start(ap, fmt);
+    ws_handshake_76(c, wskey1, wskey2, &hm->body, origin, host, &hm->uri, fmt, &ap);
+    va_end(ap);
+    c->is_websocket = 1;
+    c->is_ws_76 = 1;
+    c->is_resp = 0;
+    mg_call(c, MG_EV_WS_OPEN, hm);
+  } else if (wskey == NULL) {
     mg_http_reply(c, 426, "", "WS upgrade expected\n");
     c->is_draining = 1;
   } else {

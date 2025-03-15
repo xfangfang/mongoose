@@ -2245,6 +2245,7 @@ struct mg_connection {
   unsigned is_resp : 1;        // Response is still being generated
   unsigned is_readable : 1;    // Connection is ready to read
   unsigned is_writable : 1;    // Connection is ready to write
+  unsigned is_ws_76 : 1;       // Deprecated WebSocket protocol
 };
 
 void mg_mgr_poll(struct mg_mgr *, int ms);
