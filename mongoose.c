@@ -7271,12 +7271,18 @@ union usa {
 static socklen_t tousa(struct mg_addr *a, union usa *usa) {
   socklen_t len = sizeof(usa->sin);
   memset(usa, 0, sizeof(*usa));
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(PS5) || defined(__PS5__)
+  usa->sin.sin_len = sizeof(usa->sin);
+#endif
   usa->sin.sin_family = AF_INET;
   usa->sin.sin_port = a->port;
   memcpy(&usa->sin.sin_addr, a->ip, sizeof(uint32_t));
 #if MG_ENABLE_IPV6
   if (a->is_ip6) {
-    usa->sin.sin_family = AF_INET6;
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(PS5) || defined(__PS5__)
+    usa->sin6.sin6_len = sizeof(usa->sin6);
+#endif
+    usa->sin6.sin6_family = AF_INET6;
     usa->sin6.sin6_port = a->port;
     usa->sin6.sin6_scope_id = a->scope_id;
     memcpy(&usa->sin6.sin6_addr, a->ip, sizeof(a->ip));
@@ -7408,46 +7414,42 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
 
     if ((fd = socket(af, type, proto)) == MG_INVALID_SOCKET) {
       MG_ERROR(("socket: %d", MG_SOCK_ERR(-1)));
+    } else {
 #if defined(SO_EXCLUSIVEADDRUSE)
-    } else if ((rc = setsockopt(fd, SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
-                                (char *) &on, sizeof(on))) != 0) {
-      // "Using SO_REUSEADDR and SO_EXCLUSIVEADDRUSE"
-      MG_ERROR(("setsockopt(SO_EXCLUSIVEADDRUSE): %d %d", on, MG_SOCK_ERR(rc)));
+      setsockopt(fd, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, (char *) &on, sizeof(on));
 #elif defined(SO_REUSEADDR) && (!defined(LWIP_SOCKET) || SO_REUSE)
-    } else if ((rc = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *) &on,
-                                sizeof(on))) != 0) {
-      // 1. SO_REUSEADDR semantics on UNIX and Windows is different.  On
-      // Windows, SO_REUSEADDR allows to bind a socket to a port without error
-      // even if the port is already open by another program. This is not the
-      // behavior SO_REUSEADDR was designed for, and leads to hard-to-track
-      // failure scenarios.
-      //
-      // 2. For LWIP, SO_REUSEADDR should be explicitly enabled by defining
-      // SO_REUSE = 1 in lwipopts.h, otherwise the code below will compile but
-      // won't work! (setsockopt will return EINVAL)
-      MG_ERROR(("setsockopt(SO_REUSEADDR): %d", MG_SOCK_ERR(rc)));
+      setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *) &on, sizeof(on));
+#endif
+#if defined(SO_REUSEPORT) && !defined(PS5) && !defined(__PS5__) && !defined(__FreeBSD__)
+      setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, (char *) &on, sizeof(on));
 #endif
 #if MG_IPV6_V6ONLY
-      // Bind only to the V6 address, not V4 address on this port
-    } else if (c->loc.is_ip6 &&
-               (rc = setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, (char *) &on,
-                                sizeof(on))) != 0) {
-      // See #2089. Allow to bind v4 and v6 sockets on the same port
-      MG_ERROR(("setsockopt(IPV6_V6ONLY): %d", MG_SOCK_ERR(rc)));
+      if (c->loc.is_ip6) {
+        setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, (char *) &on, sizeof(on));
+      }
 #endif
-    } else if ((rc = bind(fd, &usa.sa, slen)) != 0) {
-      MG_ERROR(("bind: %d", MG_SOCK_ERR(rc)));
-    } else if ((type == SOCK_STREAM &&
-                (rc = listen(fd, MG_SOCK_LISTEN_BACKLOG_SIZE)) != 0)) {
-      // NOTE(lsm): FreeRTOS uses backlog value as a connection limit
-      // In case port was set to 0, get the real port number
-      MG_ERROR(("listen: %d", MG_SOCK_ERR(rc)));
-    } else {
-      setlocaddr(fd, &c->loc);
-      mg_set_non_blocking_mode(fd);
-      c->fd = S2PTR(fd);
-      MG_EPOLL_ADD(c);
-      success = true;
+      rc = bind(fd, &usa.sa, slen);
+#if defined(PS5) || defined(__PS5__)
+      // PS5 sandboxed titles get EACCES binding any explicit port.
+      // Only bind(port=0) is allowed; let the kernel assign an ephemeral port.
+      if (rc != 0 && errno == EACCES && usa.sin.sin_port != 0) {
+        MG_INFO(("PS5: bind explicit port failed (EACCES), retrying with port=0"));
+        usa.sin.sin_port = 0;
+        rc = bind(fd, &usa.sa, slen);
+      }
+#endif
+      if (rc != 0) {
+        MG_ERROR(("bind: %d", MG_SOCK_ERR(rc)));
+      } else if ((type == SOCK_STREAM &&
+                  (rc = listen(fd, MG_SOCK_LISTEN_BACKLOG_SIZE)) != 0)) {
+        MG_ERROR(("listen: %d", MG_SOCK_ERR(rc)));
+      } else {
+        setlocaddr(fd, &c->loc);
+        mg_set_non_blocking_mode(fd);
+        c->fd = S2PTR(fd);
+        MG_EPOLL_ADD(c);
+        success = true;
+      }
     }
   }
   if (success == false && fd != MG_INVALID_SOCKET) closesocket(fd);
