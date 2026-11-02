@@ -3,6 +3,7 @@
 #define MG_TLS_NONE 0     // No TLS support
 #define MG_TLS_MBED 1     // mbedTLS
 #define MG_TLS_OPENSSL 2  // OpenSSL
+#define MG_TLS_WOLFSSL 5  // WolfSSL (based on OpenSSL)
 #define MG_TLS_BUILTIN 3  // Built-in
 #define MG_TLS_CUSTOM 4   // Custom implementation
 
@@ -15,10 +16,11 @@
 #include "tls_openssl.h"
 
 struct mg_tls_opts {
-  struct mg_str ca;    // PEM or DER
-  struct mg_str cert;  // PEM or DER
-  struct mg_str key;   // PEM or DER
-  struct mg_str name;  // If not empty, enable host name verification
+  struct mg_str ca;       // PEM or DER
+  struct mg_str cert;     // PEM or DER
+  struct mg_str key;      // PEM or DER
+  struct mg_str name;     // If not empty, enable host name verification
+  int skip_verification;  // Skip certificate and host name verification
 };
 
 void mg_tls_init(struct mg_connection *, const struct mg_tls_opts *opts);

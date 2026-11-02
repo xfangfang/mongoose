@@ -16,76 +16,46 @@ static int s_num_tests = 0;
 
 #define FETCH_BUF_SIZE (256 * 1024)
 
-// Self-signed CA, CERT, KEY
-const char *s_tls_ca =
-    "-----BEGIN CERTIFICATE-----\n"
-    "MIIBqjCCAU+gAwIBAgIUESoOPGqMhf9uarzblVFwzrQweMcwCgYIKoZIzj0EAwIw\n"
-    "RDELMAkGA1UEBhMCSUUxDzANBgNVBAcMBkR1YmxpbjEQMA4GA1UECgwHQ2VzYW50\n"
-    "YTESMBAGA1UEAwwJVGVzdCBSb290MCAXDTIwMDUwOTIxNTE0NFoYDzIwNTAwNTA5\n"
-    "MjE1MTQ0WjBEMQswCQYDVQQGEwJJRTEPMA0GA1UEBwwGRHVibGluMRAwDgYDVQQK\n"
-    "DAdDZXNhbnRhMRIwEAYDVQQDDAlUZXN0IFJvb3QwWTATBgcqhkjOPQIBBggqhkjO\n"
-    "PQMBBwNCAAQsq9ECZiSW1xI+CVBP8VDuUehVA166sR2YsnJ5J6gbMQ1dUCH/QvLa\n"
-    "dBdeU7JlQcH8hN5KEbmM9BnZxMor6ussox0wGzAMBgNVHRMEBTADAQH/MAsGA1Ud\n"
-    "DwQEAwIBrjAKBggqhkjOPQQDAgNJADBGAiEAnHFsAIwGQQyRL81B04dH6d86Iq0l\n"
-    "fL8OKzndegxOaB0CIQCPwSIwEGFdURDqCC0CY2dnMrUGY5ZXu3hHCojZGS7zvg==\n"
-    "-----END CERTIFICATE-----\n";
-
-const char *s_tls_cert =
-    "-----BEGIN CERTIFICATE-----\n"
-    "MIIBhzCCASygAwIBAgIUbnMoVd8TtWH1T09dANkK2LU6IUswCgYIKoZIzj0EAwIw\n"
-    "RDELMAkGA1UEBhMCSUUxDzANBgNVBAcMBkR1YmxpbjEQMA4GA1UECgwHQ2VzYW50\n"
-    "YTESMBAGA1UEAwwJVGVzdCBSb290MB4XDTIwMDUwOTIxNTE0OVoXDTMwMDUwOTIx\n"
-    "NTE0OVowETEPMA0GA1UEAwwGc2VydmVyMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcD\n"
-    "QgAEkuBGnInDN6l06zVVQ1VcrOvH5FDu9MC6FwJc2e201P8hEpq0Q/SJS2nkbSuW\n"
-    "H/wBTTBaeXN2uhlBzMUWK790KKMvMC0wCQYDVR0TBAIwADALBgNVHQ8EBAMCA6gw\n"
-    "EwYDVR0lBAwwCgYIKwYBBQUHAwEwCgYIKoZIzj0EAwIDSQAwRgIhAPo6xx7LjCdZ\n"
-    "QY133XvLjAgVFrlucOZHONFVQuDXZsjwAiEAzHBNligA08c5U3SySYcnkhurGg50\n"
-    "BllCI0eYQ9ggp/o=\n"
-    "-----END CERTIFICATE-----\n";
-
-const char *s_tls_key =
-    "-----BEGIN PRIVATE KEY-----\n"
-    "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQglNni0t9Dg9icgG8w\n"
-    "kbfxWSS+TuNgbtNybIQXcm3NHpmhRANCAASS4EacicM3qXTrNVVDVVys68fkUO70\n"
-    "wLoXAlzZ7bTU/yESmrRD9IlLaeRtK5Yf/AFNMFp5c3a6GUHMxRYrv3Qo\n"
-    "-----END PRIVATE KEY-----\n";
-
 // Important: we use different port numbers for the Windows bug workaround. See
 // https://support.microsoft.com/en-ae/help/3039044/error-10013-wsaeacces-is-returned-when-a-second-bind-to-a-excluded-por
 
-static void test_globmatch(void) {
-  ASSERT(mg_globmatch("", 0, "", 0) == 1);
-  ASSERT(mg_globmatch("*", 1, "a", 1) == 1);
-  ASSERT(mg_globmatch("*", 1, "ab", 2) == 1);
-  ASSERT(mg_globmatch("", 0, "a", 1) == 0);
-  ASSERT(mg_globmatch("/", 1, "/foo", 4) == 0);
-  ASSERT(mg_globmatch("/*/foo", 6, "/x/bar", 6) == 0);
-  ASSERT(mg_globmatch("/*/foo", 6, "/x/foo", 6) == 1);
-  ASSERT(mg_globmatch("/*/foo", 6, "/x/foox", 7) == 0);
-  ASSERT(mg_globmatch("/*/foo*", 7, "/x/foox", 7) == 1);
-  ASSERT(mg_globmatch("/*", 2, "/abc", 4) == 1);
-  ASSERT(mg_globmatch("/*", 2, "/ab/", 4) == 0);
-  ASSERT(mg_globmatch("/*", 2, "/", 1) == 1);
-  ASSERT(mg_globmatch("/x/*", 4, "/x/2", 4) == 1);
-  ASSERT(mg_globmatch("/x/*", 4, "/x/2/foo", 8) == 0);
-  ASSERT(mg_globmatch("/x/*/*", 6, "/x/2/foo", 8) == 1);
-  ASSERT(mg_globmatch("#", 1, "///", 3) == 1);
-  ASSERT(mg_globmatch("/api/*", 6, "/api/foo", 8) == 1);
-  ASSERT(mg_globmatch("/api/*", 6, "/api/log/static", 15) == 0);
-  ASSERT(mg_globmatch("/api/#", 6, "/api/log/static", 15) == 1);
-  ASSERT(mg_globmatch("#.shtml", 7, "/ssi/index.shtml", 16) == 1);
-  ASSERT(mg_globmatch("#.c", 3, ".c", 2) == 1);
-  ASSERT(mg_globmatch("abc", 3, "ab", 2) == 0);
-  ASSERT(mg_globmatch("#.c", 3, "a.c", 3) == 1);
-  ASSERT(mg_globmatch("#.c", 3, "..c", 3) == 1);
-  ASSERT(mg_globmatch("#.c", 3, "/.c", 3) == 1);
-  ASSERT(mg_globmatch("#.c", 3, "//a.c", 5) == 1);
-  ASSERT(mg_globmatch("#.c", 3, "x/a.c", 5) == 1);
-  ASSERT(mg_globmatch("#.c", 3, "./a.c", 5) == 1);
-  ASSERT(mg_globmatch("#.shtml", 7, "./ssi/index.shtml", 17) == 1);
-  ASSERT(mg_globmatch("#aa#bb#", 7, "caabba", 6) == 1);
-  ASSERT(mg_globmatch("#aa#bb#", 7, "caabxa", 6) == 0);
-  ASSERT(mg_globmatch("a*b*c", 5, "a__b_c", 6) == 1);
+static void test_match(void) {
+  ASSERT(mg_match(mg_str_n("", 0), mg_str_n("", 0), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("a", 1), mg_str_n("*", 1), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("ab", 2), mg_str_n("*", 1), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("a", 1), mg_str_n("", 0), NULL) == 0);
+  ASSERT(mg_match(mg_str_n("/foo", 4), mg_str_n("/", 1), NULL) == 0);
+  ASSERT(mg_match(mg_str_n("/x/bar", 6), mg_str_n("/*/foo", 6), NULL) == 0);
+  ASSERT(mg_match(mg_str_n("/x/foo", 6), mg_str_n("/*/foo", 6), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("/x/foox", 7), mg_str_n("/*/foo", 6), NULL) == 0);
+  ASSERT(mg_match(mg_str_n("/x/foox", 7), mg_str_n("/*/foo*", 7), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("/abc", 4), mg_str_n("/*", 2), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("/ab/", 4), mg_str_n("/*", 2), NULL) == 0);
+  ASSERT(mg_match(mg_str_n("/", 1), mg_str_n("/*", 2), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("/x/2", 4), mg_str_n("/x/*", 4), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("/x/2/foo", 8), mg_str_n("/x/*", 4), NULL) == 0);
+  ASSERT(mg_match(mg_str_n("/x/2/foo", 8), mg_str_n("/x/*/*", 6), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("///", 3), mg_str_n("#", 1), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("/api/foo", 8), mg_str_n("/api/*", 6), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("/api/log/static", 15), mg_str_n("/api/*", 6),
+                  NULL) == 0);
+  ASSERT(mg_match(mg_str_n("/api/log/static", 15), mg_str_n("/api/#", 6),
+                  NULL) == 1);
+  ASSERT(mg_match(mg_str_n("/ssi/index.shtml", 16), mg_str_n("#.shtml", 7),
+                  NULL) == 1);
+  ASSERT(mg_match(mg_str_n(".c", 2), mg_str_n("#.c", 3), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("ab", 2), mg_str_n("abc", 3), NULL) == 0);
+  ASSERT(mg_match(mg_str_n("a.c", 3), mg_str_n("#.c", 3), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("..c", 3), mg_str_n("#.c", 3), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("/.c", 3), mg_str_n("#.c", 3), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("//a.c", 5), mg_str_n("#.c", 3), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("x/a.c", 5), mg_str_n("#.c", 3), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("./a.c", 5), mg_str_n("#.c", 3), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("./ssi/index.shtml", 17), mg_str_n("#.shtml", 7),
+                  NULL) == 1);
+  ASSERT(mg_match(mg_str_n("caabba", 6), mg_str_n("#aa#bb#", 7), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("caabxa", 6), mg_str_n("#aa#bb#", 7), NULL) == 0);
+  ASSERT(mg_match(mg_str_n("a__b_c", 6), mg_str_n("a*b*c", 5), NULL) == 1);
 
   {
     struct mg_str caps[3];
@@ -162,9 +132,27 @@ static void test_http_get_var(void) {
 }
 
 static int vcmp(struct mg_str s1, const char *s2) {
-  // MG_INFO(("->%.*s<->%s<- %d %d %d", (int) s1.len, s1.ptr, s2,
-  //(int) s1.len, strncmp(s1.ptr, s2, s1.len), mg_vcmp(&s1, s2)));
-  return mg_vcmp(&s1, s2) == 0;
+  return mg_strcmp(s1, mg_str(s2)) == 0;
+}
+static bool is_space(int c) {
+  return c == ' ' || c == '\r' || c == '\n' || c == '\t';
+}
+static struct mg_str strstrip(struct mg_str s) {
+  while (s.len > 0 && is_space((int) *s.buf)) s.buf++, s.len--;
+  while (s.len > 0 && is_space((int) *(s.buf + s.len - 1))) s.len--;
+  return s;
+}
+static const char *mgstrstr(const struct mg_str haystack,
+                            const struct mg_str needle) {
+  size_t i;
+  if (needle.len > haystack.len) return NULL;
+  if (needle.len == 0) return haystack.buf;
+  for (i = 0; i <= haystack.len - needle.len; i++) {
+    if (memcmp(haystack.buf + i, needle.buf, needle.len) == 0) {
+      return haystack.buf + i;
+    }
+  }
+  return NULL;
 }
 
 static void test_url(void) {
@@ -401,9 +389,9 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data) {
   } else if (ev == MG_EV_MQTT_MSG) {
     struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
     snprintf(test_data->topic, test_data->topicsize, "%.*s",
-             (int) mm->topic.len, mm->topic.ptr);
+             (int) mm->topic.len, mm->topic.buf);
     snprintf(buf + 1, test_data->msgsize - 2, "%.*s", (int) mm->data.len,
-             mm->data.ptr);
+             mm->data.buf);
 
     if (mm->cmd == MQTT_CMD_PUBLISH && c->is_mqtt5) {
       size_t pos = 0;
@@ -417,21 +405,21 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data) {
 
       ASSERT((pos = mg_mqtt_next_prop(mm, &prop, pos)) > 0);
       ASSERT(prop.id == MQTT_PROP_CONTENT_TYPE);
-      ASSERT(strncmp(prop.val.ptr, "test_content_val_2", prop.val.len) == 0 &&
+      ASSERT(strncmp(prop.val.buf, "test_content_val_2", prop.val.len) == 0 &&
              prop.val.len == strlen("test_content_val_2"));
 
       ASSERT((pos = mg_mqtt_next_prop(mm, &prop, pos)) > 0);
       ASSERT(prop.id == MQTT_PROP_USER_PROPERTY);
-      ASSERT(strncmp(prop.key.ptr, "test_key_1", prop.key.len) == 0 &&
+      ASSERT(strncmp(prop.key.buf, "test_key_1", prop.key.len) == 0 &&
              prop.key.len == strlen("test_key_1"));
-      ASSERT(strncmp(prop.val.ptr, "test_value_1", prop.val.len) == 0 &&
+      ASSERT(strncmp(prop.val.buf, "test_value_1", prop.val.len) == 0 &&
              prop.val.len == strlen("test_value_1"));
 
       ASSERT((pos = mg_mqtt_next_prop(mm, &prop, pos)) > 0);
       ASSERT(prop.id == MQTT_PROP_USER_PROPERTY);
-      ASSERT(strncmp(prop.key.ptr, "test_key_2", prop.key.len) == 0 &&
+      ASSERT(strncmp(prop.key.buf, "test_key_2", prop.key.len) == 0 &&
              prop.key.len == strlen("test_key_2"));
-      ASSERT(strncmp(prop.val.ptr, "test_value_2", prop.val.len) == 0 &&
+      ASSERT(strncmp(prop.val.buf, "test_value_2", prop.val.len) == 0 &&
              prop.val.len == strlen("test_value_2"));
 
       ASSERT((pos = mg_mqtt_next_prop(mm, &prop, pos)) == 0);
@@ -483,12 +471,12 @@ static void test_mqtt_base(void) {
 static void check_mqtt_message(struct mg_mqtt_opts *opts,
                                struct mqtt_data *data, bool enforce) {
   if (opts->topic.len != strlen(data->topic) ||
-      strcmp(opts->topic.ptr, data->topic)) {
+      strcmp(opts->topic.buf, data->topic)) {
     MG_INFO(("TOPIC[%s]", data->topic));
     if (enforce) ASSERT(0);
   }
   if (*data->msg != 'X' || opts->message.len != (strlen(&data->msg[1])) ||
-      strcmp(opts->message.ptr, &data->msg[1])) {
+      strcmp(opts->message.buf, &data->msg[1])) {
     MG_INFO(("MSG[%s]", data->msg));
     if (enforce) ASSERT(0);
   }
@@ -538,10 +526,11 @@ static void test_mqtt_basic(void) {
 
   // Publish with QoS1 to subscribed topic and check reception
   // keep former opts.topic
-  opts.message = mg_str("hi1"), opts.qos = 1, opts.retain = false;
+  opts.message = mg_str("hi1"), opts.qos = 1, opts.retain = false,
+  opts.retransmit_id = 0;
   retries = 0;  // don't do retries for test speed
   do {          // retry on failure after an expected timeout
-    mg_mqtt_pub(c, &opts);
+    opts.retransmit_id = mg_mqtt_pub(c, &opts);  // save id for possible resend
     for (i = 0; i < 500 && test_data.flags == 0; i++) mg_mgr_poll(&mgr, 10);
   } while (test_data.flags == 0 && retries--);
   ASSERT(test_data.flags == flags_published);
@@ -549,6 +538,7 @@ static void test_mqtt_basic(void) {
   check_mqtt_message(&opts, &test_data, true);
   memset(mbuf + 1, 0, sizeof(mbuf) - 1);
   test_data.flags = 0;
+  opts.retransmit_id = 0;
 
   // Clean Disconnect !
   mg_mqtt_disconnect(c, NULL);
@@ -603,7 +593,7 @@ static void test_mqtt_ver(uint8_t mqtt_version) {
   }
   retries = 0;  // don't do retries for test speed
   do {          // retry on failure after an expected timeout
-    mg_mqtt_pub(c, &opts);
+    opts.retransmit_id = mg_mqtt_pub(c, &opts);  // save id for possible resend
     for (i = 0; i < 500 && test_data.flags == 0; i++) mg_mgr_poll(&mgr, 10);
   } while (test_data.flags == 0 && retries--);
   ASSERT(test_data.flags == flags_published);
@@ -611,6 +601,7 @@ static void test_mqtt_ver(uint8_t mqtt_version) {
   check_mqtt_message(&opts, &test_data, true);
   memset(mbuf + 1, 0, sizeof(mbuf) - 1);
   test_data.flags = 0;
+  opts.retransmit_id = 0;
 
   // Publish with QoS2 to subscribed topic and check (simultaneous) reception
   // keep former opts.topic
@@ -622,12 +613,13 @@ static void test_mqtt_ver(uint8_t mqtt_version) {
   }
   retries = 0;  // don't do retries for test speed
   do {          // retry on failure after an expected timeout
-    mg_mqtt_pub(c, &opts);
+    opts.retransmit_id = mg_mqtt_pub(c, &opts);  // save id for possible resend
     for (i = 0; i < 500 && !(test_data.flags & flags_received); i++)
       mg_mgr_poll(&mgr, 10);
   } while (!(test_data.flags & flags_received) && retries--);
   ASSERT(test_data.flags & flags_received);
   test_data.flags &= ~flags_received;
+  opts.retransmit_id = 0;
   // Mongoose sent PUBREL, wait for PUBCOMP
   for (i = 0; i < 500 && !(test_data.flags & flags_completed); i++)
     mg_mgr_poll(&mgr, 10);
@@ -659,45 +651,45 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_ACCEPT && topts != NULL) mg_tls_init(c, topts);
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    MG_INFO(("[%.*s %.*s] message len %d", (int) hm->method.len, hm->method.ptr,
-             (int) hm->uri.len, hm->uri.ptr, (int) hm->message.len));
-    if (mg_http_match_uri(hm, "/foo/*")) {
-      mg_http_reply(c, 200, "", "uri: %.*s", hm->uri.len - 5, hm->uri.ptr + 5);
-    } else if (mg_http_match_uri(hm, "/ws")) {
+    MG_INFO(("[%.*s %.*s] message len %d", (int) hm->method.len, hm->method.buf,
+             (int) hm->uri.len, hm->uri.buf, (int) hm->message.len));
+    if (mg_match(hm->uri, mg_str("/foo/*"), NULL)) {
+      mg_http_reply(c, 200, "", "uri: %.*s", hm->uri.len - 5, hm->uri.buf + 5);
+    } else if (mg_match(hm->uri, mg_str("/ws"), NULL)) {
       mg_ws_upgrade(c, hm, NULL);
-    } else if (mg_http_match_uri(hm, "/body")) {
-      mg_http_reply(c, 200, "", "%.*s", (int) hm->body.len, hm->body.ptr);
-    } else if (mg_http_match_uri(hm, "/bar")) {
+    } else if (mg_match(hm->uri, mg_str("/body"), NULL)) {
+      mg_http_reply(c, 200, "", "%.*s", (int) hm->body.len, hm->body.buf);
+    } else if (mg_match(hm->uri, mg_str("/bar"), NULL)) {
       mg_http_reply(c, 404, "", "not found");
-    } else if (mg_http_match_uri(hm, "/no_reason")) {
+    } else if (mg_match(hm->uri, mg_str("/no_reason"), NULL)) {
       mg_printf(c, "%s", "HTTP/1.0 200\r\nContent-Length: 2\r\n\r\nok");
-    } else if (mg_http_match_uri(hm, "/badroot")) {
+    } else if (mg_match(hm->uri, mg_str("/badroot"), NULL)) {
       struct mg_http_serve_opts sopts;
       memset(&sopts, 0, sizeof(sopts));
       sopts.root_dir = "/BAAADDD!";
       mg_http_serve_dir(c, hm, &sopts);
-    } else if (mg_http_match_uri(hm, "/creds")) {
+    } else if (mg_match(hm->uri, mg_str("/creds"), NULL)) {
       char user[100], pass[100];
       mg_http_creds(hm, user, sizeof(user), pass, sizeof(pass));
       mg_http_reply(c, 200, "", "[%s]:[%s]", user, pass);
-    } else if (mg_http_match_uri(hm, "/upload")) {
+    } else if (mg_match(hm->uri, mg_str("/upload"), NULL)) {
       mg_http_upload(c, hm, &mg_fs_posix, ".", 99999);
       c->is_hexdumping = 1;
-    } else if (mg_http_match_uri(hm, "/test/")) {
+    } else if (mg_match(hm->uri, mg_str("/dirtest/"), NULL)) {
       struct mg_http_serve_opts sopts;
       memset(&sopts, 0, sizeof(sopts));
       sopts.root_dir = ".";
-      sopts.extra_headers = "A: B\r\nC: D\r\n";
+      sopts.extra_headers = "A: B\r\nE: F\r\n";
       mg_http_serve_dir(c, hm, &sopts);
-    } else if (mg_http_match_uri(hm, "/servefile")) {
+    } else if (mg_match(hm->uri, mg_str("/servefile"), NULL)) {
       struct mg_http_serve_opts sopts;
       memset(&sopts, 0, sizeof(sopts));
       sopts.mime_types = "foo=a/b,txt=c/d";
-      mg_http_serve_file(c, hm, "test/data/a.txt", &sopts);
+      mg_http_serve_file(c, hm, "data/a.txt", &sopts);
     } else {
       struct mg_http_serve_opts sopts;
       memset(&sopts, 0, sizeof(sopts));
-      sopts.root_dir = "./test/data";
+      sopts.root_dir = "./data";
       sopts.ssi_pattern = "#.shtml";
       sopts.extra_headers = "C: D\r\n";
       mg_http_serve_dir(c, hm, &sopts);
@@ -708,7 +700,7 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data) {
     mg_ws_send(c, "opened", 6, WEBSOCKET_OP_BINARY);
   } else if (ev == MG_EV_WS_MSG) {
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
-    mg_ws_send(c, wm->data.ptr, wm->data.len, WEBSOCKET_OP_BINARY);
+    mg_ws_send(c, wm->data.buf, wm->data.len, WEBSOCKET_OP_BINARY);
   }
 }
 
@@ -722,8 +714,8 @@ static void fcb(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     snprintf(fd->buf, FETCH_BUF_SIZE, "%.*s", (int) hm->message.len,
-             hm->message.ptr);
-    fd->code = atoi(hm->uri.ptr);
+             hm->message.buf);
+    fd->code = atoi(hm->uri.buf);
     fd->closed = 1;
     c->is_closing = 1;
     (void) c;
@@ -743,10 +735,11 @@ static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
   if (c != NULL && mg_url_is_ssl(url)) {
     struct mg_tls_opts opts;
     memset(&opts, 0, sizeof(opts));  // read CA from packed_fs
-    opts.ca = mg_unpacked("test/data/ca.pem");
-    if (strstr(url, "127.0.0.1") != NULL) {
+    opts.name = mg_url_host(url);
+    opts.ca = mg_unpacked("/data/ca.pem");
+    if (strstr(url, "localhost") != NULL) {
       // Local connection, use self-signed certificates
-      opts.ca = mg_str(s_tls_ca);
+      opts.ca = mg_unpacked("/certs/ca.crt");
       // opts.cert = mg_str(s_tls_cert);
       // opts.key = mg_str(s_tls_key);
     }
@@ -775,7 +768,7 @@ static int cmpbody(const char *buf, const char *str) {
   struct mg_http_message hm = gethm(buf);
   size_t len = strlen(buf);
   // mg_http_parse(buf, len, &hm);
-  if (hm.body.len > len) hm.body.len = len - (size_t) (hm.body.ptr - buf);
+  if (hm.body.len > len) hm.body.len = len - (size_t) (hm.body.buf - buf);
   return mg_strcmp(hm.body, s);
 }
 
@@ -797,10 +790,10 @@ static void wcb(struct mg_connection *c, int ev, void *ev_data) {
     p[0] += 100;
   } else if (ev == MG_EV_WS_MSG) {
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
-    if (mg_strstr(wm->data, mg_str("foobar")))
+    if (mgstrstr(wm->data, mg_str("foobar")))
       mg_ws_send(c, "", 0, WEBSOCKET_OP_CLOSE);
-    if (mg_strstr(wm->data, mg_str("boo"))) p[0] += 2;
-    if (mg_strstr(wm->data, mg_str("foobar"))) p[0] += 3;
+    if (mgstrstr(wm->data, mg_str("boo"))) p[0] += 2;
+    if (mgstrstr(wm->data, mg_str("foobar"))) p[0] += 3;
   } else if (ev == MG_EV_CLOSE) {
     p[0] += 10;
   }
@@ -821,7 +814,7 @@ static void ew2(struct mg_connection *c, int ev, void *ev_data) {
       size_t ok = 1, i;
       ASSERT(wm->data.len == size);
       for (i = 0; i < size; i++) {
-        if (wm->data.ptr[i] != 'A') ok = 0;
+        if (wm->data.buf[i] != 'A') ok = 0;
       }
       ASSERT(ok == 1);
       *(int *) c->fn_data = 1;
@@ -873,6 +866,7 @@ static void test_http_server(void) {
 
   ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\n\n") == 200);
   ASSERT(cmpbody(buf, "hello\n") == 0);
+  ASSERT(cmpheader(buf, "C", "D"));
 
   // Invalid header: failure
   ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\nA B\n\n") == 0);
@@ -944,7 +938,7 @@ static void test_http_server(void) {
     char etag[100];
     size_t size = 0;
     time_t mtime = 0;
-    ASSERT(mg_fs_posix.st("./test/data/a.txt", &size, &mtime) != 0);
+    ASSERT(mg_fs_posix.st("./data/a.txt", &size, &mtime) != 0);
     ASSERT(mg_http_etag(etag, sizeof(etag), size, mtime) == etag);
     ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\nIf-None-Match: %s\n\n",
                  etag) == 304);
@@ -998,10 +992,10 @@ static void test_http_server(void) {
   // ASSERT(cmpbody(buf, "Invalid web root [/BAAADDD!]\n") == 0);
 
   {
-    char *data = mg_file_read(&mg_fs_posix, "./test/data/ca.pem", NULL);
+    struct mg_str data = mg_file_read(&mg_fs_posix, "./data/ca.pem");
     ASSERT(fetch(&mgr, buf, url, "GET /ca.pem HTTP/1.0\r\n\n") == 200);
-    ASSERT(cmpbody(buf, data) == 0);
-    free(data);
+    ASSERT(cmpbody(buf, data.buf) == 0);
+    free((void *) data.buf);
   }
 
   {
@@ -1025,10 +1019,13 @@ static void test_http_server(void) {
   }
 
   // Directory listing
-  fetch(&mgr, buf, url, "GET /test/ HTTP/1.0\n\n");
-  ASSERT(fetch(&mgr, buf, url, "GET /test/ HTTP/1.0\n\n") == 200);
-  ASSERT(mg_strstr(mg_str(buf), mg_str(">Index of /test/<")) != NULL);
-  ASSERT(mg_strstr(mg_str(buf), mg_str(">fuzz.c<")) != NULL);
+  fetch(&mgr, buf, url, "GET /dirtest/ HTTP/1.0\n\n");
+  ASSERT(fetch(&mgr, buf, url, "GET /dirtest/ HTTP/1.0\n\n") == 200);
+  ASSERT(mgstrstr(mg_str(buf), mg_str(">Index of /dirtest/<")) != NULL);
+  ASSERT(mgstrstr(mg_str(buf), mg_str(">fuzz.c<")) != NULL);
+  ASSERT(cmpheader(buf, "A", "B"));
+  ASSERT(!cmpheader(buf, "C", "D"));
+  ASSERT(cmpheader(buf, "E", "F"));
 
   {
     // Credentials
@@ -1059,9 +1056,10 @@ static void test_http_server(void) {
 
   {
     // Test upload
-    char *p;
+    struct mg_str s;
     remove("uploaded.txt");
-    ASSERT((p = mg_file_read(&mg_fs_posix, "uploaded.txt", NULL)) == NULL);
+    s = mg_file_read(&mg_fs_posix, "uploaded.txt");
+    ASSERT(s.buf == NULL);
     ASSERT(fetch(&mgr, buf, url,
                  "POST /upload HTTP/1.0\n"
                  "Content-Length: 1\n\nx") == 400);
@@ -1074,22 +1072,25 @@ static void test_http_server(void) {
                  "POST /upload?file=uploaded.txt&offset=5 HTTP/1.0\r\n"
                  "Content-Length: 6\r\n"
                  "\r\n\nworld") == 200);
-    ASSERT((p = mg_file_read(&mg_fs_posix, "uploaded.txt", NULL)) != NULL);
-    ASSERT(strcmp(p, "hello\nworld") == 0);
-    free(p);
+    s = mg_file_read(&mg_fs_posix, "uploaded.txt");
+    ASSERT(s.buf != NULL);
+    ASSERT(strcmp(s.buf, "hello\nworld") == 0);
+    free((void *) s.buf);
     remove("uploaded.txt");
   }
 
   {
     // Test upload directory traversal
-    char *p;
+    struct mg_str s;
     remove("uploaded.txt");
-    ASSERT((p = mg_file_read(&mg_fs_posix, "uploaded.txt", NULL)) == NULL);
+    s = mg_file_read(&mg_fs_posix, "uploaded.txt");
+    ASSERT(s.buf == NULL);
     ASSERT(fetch(&mgr, buf, url,
                  "POST /upload?file=../uploaded.txt HTTP/1.0\r\n"
                  "Content-Length: 5\r\n"
                  "\r\nhello") == 400);
-    ASSERT((p = mg_file_read(&mg_fs_posix, "uploaded.txt", NULL)) == NULL);
+    s = mg_file_read(&mg_fs_posix, "uploaded.txt");
+    ASSERT(s.buf == NULL);
   }
 
   // HEAD request
@@ -1140,24 +1141,24 @@ static void test_http_server(void) {
 static void h4(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    MG_INFO(("[%.*s %.*s] message len %d", (int) hm->method.len, hm->method.ptr,
-             (int) hm->uri.len, hm->uri.ptr, (int) hm->message.len));
-    if (mg_http_match_uri(hm, "/a/#")) {
+    MG_INFO(("[%.*s %.*s] message len %d", (int) hm->method.len, hm->method.buf,
+             (int) hm->uri.len, hm->uri.buf, (int) hm->message.len));
+    if (mg_match(hm->uri, mg_str("/a/#"), NULL)) {
       struct mg_http_serve_opts opts;
       memset(&opts, 0, sizeof(opts));
-      opts.root_dir = "/a=./test/data";
-      opts.page404 = "./test/data/404.html";  // existing 404 page
+      opts.root_dir = "/a=./data";
+      opts.page404 = "./data/404.html";  // existing 404 page
       mg_http_serve_dir(c, hm, &opts);
-    } else if (mg_http_match_uri(hm, "/b/#")) {
+    } else if (mg_match(hm->uri, mg_str("/b/#"), NULL)) {
       struct mg_http_serve_opts opts;
       memset(&opts, 0, sizeof(opts));
-      opts.root_dir = "/b=./test/data";
-      opts.page404 = "./test/data/nooooo.html";  // non-existing 404 page
+      opts.root_dir = "/b=./data";
+      opts.page404 = "./data/nooooo.html";  // non-existing 404 page
       mg_http_serve_dir(c, hm, &opts);
     } else {  // null 404 page
       struct mg_http_serve_opts opts;
       memset(&opts, 0, sizeof(opts));
-      opts.root_dir = "./test/data";
+      opts.root_dir = "./data";
       mg_http_serve_dir(c, hm, &opts);
     }
   }
@@ -1182,6 +1183,15 @@ static void test_http_404(void) {
   ASSERT(cmpbody(buf, "Not found\n") == 0);
   ASSERT(fetch(&mgr, buf, url, "GET /a/xx.txt HTTP/1.0\n\n") == 200);
   ASSERT(cmpbody(buf, "boo\n") == 0);
+  {  // txt requested, existent 404 is html
+    struct mg_http_message hm;
+    struct mg_str *cl;
+    mg_http_parse(buf, strlen(buf), &hm);
+    cl = mg_http_get_header(&hm, "Content-Type");
+    ASSERT(cl != NULL);
+    if (cl->len > 9) cl->len = 9;  // restrict to text/html len max
+    ASSERT(mg_strcmp(*cl, mg_str("text/html")) == 0);
+  }
   ASSERT(fetch(&mgr, buf, url, "GET /b/xx.txt HTTP/1.0\n\n") == 404);
   ASSERT(cmpbody(buf, "Not found\n") == 0);
 
@@ -1194,19 +1204,27 @@ static void test_tls(void) {
 #if MG_TLS
   struct mg_mgr mgr;
   struct mg_connection *c;
-  const char *url = "https://127.0.0.1:12347";
+  const char *url = "https://localhost:12347";
   char buf[FETCH_BUF_SIZE];
   struct mg_tls_opts opts;
+  struct mg_str data = mg_unpacked("/Makefile");
   memset(&opts, 0, sizeof(opts));
   // opts.ca = mg_str(s_tls_ca);
-  opts.cert = mg_str(s_tls_cert);
-  opts.key = mg_str(s_tls_key);
+  opts.cert = mg_unpacked("/certs/server.crt");
+  opts.key = mg_unpacked("/certs/server.key");
   mg_mgr_init(&mgr);
   c = mg_http_listen(&mgr, url, eh1, &opts);
   ASSERT(c != NULL);
   ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\n\n") == 200);
   // MG_INFO(("%s", buf));
   ASSERT(cmpbody(buf, "hello\n") == 0);
+  // POST a larger file, make sure we drain TLS buffers and read all, #2619
+  ASSERT(data.buf != NULL && data.len > 0);
+  ASSERT(fetch(&mgr, buf, url,
+               "POST /foo/bar HTTP/1.0\n"
+               "Content-Length: %lu\n\n"
+               "%s",
+               data.len, data.buf) == 200);
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 #endif
@@ -1217,15 +1235,17 @@ static void f3(struct mg_connection *c, int ev, void *ev_data) {
   // MG_INFO(("%d", ev));
   if (ev == MG_EV_CONNECT) {
     // c->is_hexdumping = 1;
+    ASSERT((c->loc.ip[0] != 0));  // Make sure that c->loc address is populated
     mg_printf(c, "GET /%s HTTP/1.0\r\nHost: %s\r\n\r\n",
               c->rem.is_ip6 ? "" : "/robots.txt",
               c->rem.is_ip6 ? "ipv6.google.com" : "cesanta.com");
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    // MG_INFO(("-->[%.*s]", (int) hm->message.len, hm->message.ptr));
-    // ASSERT(mg_vcmp(&hm->method, "HTTP/1.1") == 0);
-    // ASSERT(mg_vcmp(&hm->uri, "301") == 0);
+    // MG_INFO(("-->[%.*s]", (int) hm->message.len, hm->message.buf));
+    // ASSERT(vcmp(hm->method, "HTTP/1.1"));
+    // ASSERT(vcmp(hm->uri, "301"));
     *ok = mg_http_status(hm);
+    c->is_closing = 1;
   } else if (ev == MG_EV_CLOSE) {
     if (*ok == 0) *ok = 888;
   } else if (ev == MG_EV_ERROR) {
@@ -1238,33 +1258,28 @@ static void test_http_client(void) {
   struct mg_connection *c = NULL;
   const char *url = "http://cesanta.com";
   int i, ok = 0;
-  size_t size = 0;  // read CA certs from plain file
-  char *data = mg_file_read(&mg_fs_posix, "test/data/ca.pem", &size);
   struct mg_tls_opts opts;
   memset(&opts, 0, sizeof(opts));
+  opts.ca = mg_unpacked("/data/ca.pem");
+  opts.name = mg_url_host(url);
+  ASSERT(opts.ca.len > 0);
+  ASSERT(opts.name.len > 0);
   mg_mgr_init(&mgr);
   c = mg_http_connect(&mgr, url, f3, &ok);
   ASSERT(c != NULL);
   for (i = 0; i < 500 && ok <= 0; i++) mg_mgr_poll(&mgr, 1);
   MG_INFO(("%d", ok));
   ASSERT(ok == 301);
-  c->is_closing = 1;
   mg_mgr_poll(&mgr, 0);
   ok = 0;
 #if MG_TLS
   c = mg_http_connect(&mgr, "https://cesanta.com", f3, &ok);
   ASSERT(c != NULL);
-  if (c != NULL) {
-    opts.ca = mg_str_n(data, size);
-    // opts.name = mg_url_host(url);
-    mg_tls_init(c, &opts);
-  }
+  mg_tls_init(c, &opts);
   for (i = 0; i < 1500 && ok <= 0; i++) mg_mgr_poll(&mgr, 1);
   ASSERT(ok == 200);
-  c->is_closing = 1;
   mg_mgr_poll(&mgr, 1);
 
-#if 1
   // Test failed host validation
   c = mg_http_connect(&mgr, "https://cesanta.com", f3, &ok);
   ASSERT(c != NULL);
@@ -1276,6 +1291,9 @@ static void test_http_client(void) {
   ASSERT(ok == 777);
   mg_mgr_poll(&mgr, 1);
 
+  // Test empty CA
+  // Disable mbedTLS: https://github.com/Mbed-TLS/mbedtls/issues/7075
+#if MG_TLS != MG_TLS_MBED
   opts.name = mg_str("cesanta.com");
   opts.ca = mg_str("");
   c = mg_http_connect(&mgr, "https://cesanta.com", f3, &ok);
@@ -1299,39 +1317,12 @@ static void test_http_client(void) {
 
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
-  free(data);
-}
-
-// Test host validation only (no CA, no cert)
-static void test_host_validation(void) {
-#if MG_TLS
-  const char *url = "https://cesanta.com";
-  struct mg_tls_opts opts;
-  struct mg_mgr mgr;
-  struct mg_connection *c = NULL;
-  int i, ok = 0;
-  memset(&opts, 0, sizeof(opts));
-  mg_mgr_init(&mgr);
-
-  ok = 0;
-  c = mg_http_connect(&mgr, url, f3, &ok);
-  ASSERT(c != NULL);
-  opts.ca = mg_unpacked("test/data/ca.pem");
-  mg_tls_init(c, &opts);
-  for (i = 0; i < 1500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
-  ASSERT(ok == 200);
-  c->is_closing = 1;
-  mg_mgr_poll(&mgr, 1);
-
-  mg_mgr_free(&mgr);
-  ASSERT(mgr.conns == NULL);
-#endif
 }
 
 static void f4(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    mg_printf(c, "HTTP/1.0 200 OK\n\n%.*s/%s", (int) hm->uri.len, hm->uri.ptr,
+    mg_printf(c, "HTTP/1.0 200 OK\n\n%.*s/%s", (int) hm->uri.len, hm->uri.buf,
               "abcdef");
     strcat((char *) c->fn_data, "m");
     c->is_draining = 1;
@@ -1352,11 +1343,24 @@ static void f4c(struct mg_connection *c, int ev, void *ev_data) {
   }
 }
 
+static void f41(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_HTTP_MSG) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    mg_printf(c, "HTTP/1.0 200 OK\n\n%.*s/%s", (int) hm->uri.len, hm->uri.buf,
+              "abcdef");
+  }
+}
+
 static void test_http_no_content_length(void) {
   char buf1[10] = {0}, buf2[10] = {0};
+  char buf[100];
   struct mg_mgr mgr;
   const char *url = "http://127.0.0.1:12348";
   int i;
+  const char *post_req =
+      "POST / HTTP/1.1\r\nContent-Type:"
+      "b/a\r\nContent-Length: 15\r\n\r\n"
+      "{\"key\": \"value\"}";
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, url, f4, (void *) buf1);
   mg_http_connect(&mgr, url, f4c, (void *) buf2);
@@ -1365,14 +1369,31 @@ static void test_http_no_content_length(void) {
   ASSERT(strcmp(buf1, "mc") == 0);
   ASSERT(strcmp(buf2, "mc") == 0);
   mg_mgr_free(&mgr);
+
+  mg_mgr_init(&mgr);
+  mg_http_listen(&mgr, url, f41, (void *) NULL);
+  ASSERT(fetch(&mgr, buf, url, "POST / HTTP/1.1\r\n\r\n") == 411);
+  ASSERT(fetch(&mgr, buf, url, "HTTP/1.1 200\r\n\r\n") == 411);
+  ASSERT(fetch(&mgr, buf, url, "HTTP/1.1 100\r\n\r\n") != 411);
+  ASSERT(fetch(&mgr, buf, url, "HTTP/1.1 304\r\n\r\n") != 411);
+  ASSERT(fetch(&mgr, buf, url, "HTTP/1.1 305\r\n\r\n") == 411);
+  ASSERT(fetch(&mgr, buf, url, post_req) != 411);
+  mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 }
 
 static void f5(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    mg_http_reply(c, 200, "", "%.*s", (int) hm->uri.len, hm->uri.ptr);
+    mg_http_reply(c, 200, "", "%.*s", (int) hm->uri.len, hm->uri.buf);
     (*(int *) c->fn_data)++;
+  }
+}
+
+static void f6(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_HTTP_MSG) {
+    (*(int *) c->fn_data)++;
+    (void) ev_data;
   }
 }
 
@@ -1380,14 +1401,22 @@ static void test_http_pipeline(void) {
   struct mg_mgr mgr;
   const char *url = "http://127.0.0.1:12377";
   struct mg_connection *c;
-  int i, ok = 0;
+  int i, ok = 0, ok2 = 0;
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, url, f5, (void *) &ok);
-  c = mg_http_connect(&mgr, url, NULL, NULL);
+  c = mg_http_connect(&mgr, url, f6, &ok2);
   mg_printf(c, "POST / HTTP/1.0\nContent-Length: 5\n\n12345GET / HTTP/1.0\n\n");
   for (i = 0; i < 20; i++) mg_mgr_poll(&mgr, 1);
-  // MG_INFO(("-----> [%d]", ok));
   ASSERT(ok == 2);
+  ASSERT(ok2 == 2);
+  // Fire a valid, then invalid request, see #2592. First one should serve
+  ok = ok2 = 0;
+  c = mg_http_connect(&mgr, url, f6, (void *) &ok2);
+  mg_printf(c, "GET / HTTP/1.1\n\nInvalid\n\n");
+  for (i = 0; i < 20; i++) mg_mgr_poll(&mgr, 1);
+  ASSERT(ok == 1);
+  ASSERT(ok2 == 1);
+  // MG_INFO(("-----> [%d] [%d]", ok, ok2));
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 }
@@ -1410,16 +1439,16 @@ static void test_http_parse(void) {
     const char *s = "GET /blah HTTP/1.0\r\nFoo:  bar  \r\n\r\n";
     size_t idx, len = strlen(s);
     ASSERT(mg_http_parse(s, strlen(s), &req) == (int) len);
-    ASSERT(mg_vcmp(&req.headers[0].name, "Foo") == 0);
-    ASSERT(mg_vcmp(&req.headers[0].value, "bar") == 0);
+    ASSERT(vcmp(req.headers[0].name, "Foo"));
+    ASSERT(vcmp(req.headers[0].value, "bar"));
     ASSERT(req.headers[1].name.len == 0);
-    ASSERT(req.headers[1].name.ptr == NULL);
+    ASSERT(req.headers[1].name.buf == NULL);
     ASSERT(req.query.len == 0);
     ASSERT(req.message.len == len);
     ASSERT(req.body.len == 0);
-    ASSERT(mg_vcmp(&req.method, "GET") == 0);
-    ASSERT(mg_vcmp(&req.uri, "/blah") == 0);
-    ASSERT(mg_vcmp(&req.proto, "HTTP/1.0") == 0);
+    ASSERT(vcmp(req.method, "GET"));
+    ASSERT(vcmp(req.uri, "/blah"));
+    ASSERT(vcmp(req.proto, "HTTP/1.0"));
     for (idx = 0; idx < len; idx++) ASSERT(mg_http_parse(s, idx, &req) == 0);
   }
 
@@ -1447,12 +1476,12 @@ static void test_http_parse(void) {
     const char *s = "get b c\nz:  k \nb: t\nv:k\n\n xx";
     ASSERT(mg_http_parse(s, strlen(s), &req) == (int) strlen(s) - 3);
     ASSERT(req.headers[3].name.len == 0);
-    ASSERT(mg_vcmp(&req.headers[0].name, "z") == 0);
-    ASSERT(mg_vcmp(&req.headers[0].value, "k") == 0);
-    ASSERT(mg_vcmp(&req.headers[1].name, "b") == 0);
-    ASSERT(mg_vcmp(&req.headers[1].value, "t") == 0);
-    ASSERT(mg_vcmp(&req.headers[2].name, "v") == 0);
-    ASSERT(mg_vcmp(&req.headers[2].value, "k") == 0);
+    ASSERT(vcmp(req.headers[0].name, "z"));
+    ASSERT(vcmp(req.headers[0].value, "k"));
+    ASSERT(vcmp(req.headers[1].name, "b"));
+    ASSERT(vcmp(req.headers[1].value, "t"));
+    ASSERT(vcmp(req.headers[2].name, "v"));
+    ASSERT(vcmp(req.headers[2].value, "k"));
     ASSERT(req.body.len == 0);
   }
 
@@ -1472,12 +1501,12 @@ static void test_http_parse(void) {
     ASSERT(mg_http_parse(s, strlen(s), &req) == (int) strlen(s));
     ASSERT(req.body.len == 0);
     ASSERT(req.headers[1].name.len == 0);
-    ASSERT(mg_vcmp(&req.headers[0].name, "місто") == 0);
-    ASSERT(mg_vcmp(&req.headers[0].value, "кіїв") == 0);
+    ASSERT(vcmp(req.headers[0].name, "місто"));
+    ASSERT(vcmp(req.headers[0].value, "кіїв"));
     ASSERT((v = mg_http_get_header(&req, "місто")) != NULL);
-    ASSERT(mg_vcmp(&req.method, "ґєт") == 0);
-    ASSERT(mg_vcmp(&req.uri, "/слеш") == 0);
-    ASSERT(mg_vcmp(&req.proto, "вах вах") == 0);
+    ASSERT(vcmp(req.method, "ґєт"));
+    ASSERT(vcmp(req.uri, "/слеш"));
+    ASSERT(vcmp(req.proto, "вах вах"));
   }
 
   {
@@ -1487,16 +1516,16 @@ static void test_http_parse(void) {
     ASSERT(req.message.len == 21 - 3 + strlen(s));
     ASSERT(mg_http_get_header(&req, "foo") == NULL);
     ASSERT((v = mg_http_get_header(&req, "contENT-Length")) != NULL);
-    ASSERT(mg_vcmp(v, "21") == 0);
+    ASSERT(vcmp(*v, "21"));
     ASSERT((v = mg_http_get_header(&req, "B")) != NULL);
-    ASSERT(mg_vcmp(v, "t") == 0);
+    ASSERT(vcmp(*v, "t"));
   }
 
   {
     const char *s = "GET /foo?a=b&c=d HTTP/1.0\n\n";
     ASSERT(mg_http_parse(s, strlen(s), &req) == (int) strlen(s));
-    ASSERT(mg_vcmp(&req.uri, "/foo") == 0);
-    ASSERT(mg_vcmp(&req.query, "a=b&c=d") == 0);
+    ASSERT(vcmp(req.uri, "/foo"));
+    ASSERT(vcmp(req.query, "a=b&c=d"));
   }
 
   {
@@ -1514,9 +1543,9 @@ static void test_http_parse(void) {
   {
     const char *s = "HTTP/1.0 200 OK\n\n";
     ASSERT(mg_http_parse(s, strlen(s), &req) == (int) strlen(s));
-    ASSERT(mg_vcmp(&req.method, "HTTP/1.0") == 0);
-    ASSERT(mg_vcmp(&req.uri, "200") == 0);
-    ASSERT(mg_vcmp(&req.proto, "OK") == 0);
+    ASSERT(vcmp(req.method, "HTTP/1.0"));
+    ASSERT(vcmp(req.uri, "200"));
+    ASSERT(vcmp(req.proto, "OK"));
     ASSERT(req.body.len == (size_t) ~0);
   }
 
@@ -1531,20 +1560,20 @@ static void test_http_parse(void) {
         "45455\r\nRange:  0-1 \r\n\r\n";
     ASSERT(mg_http_parse(s, strlen(s), &req) == (int) strlen(s));
     ASSERT((v = mg_http_get_header(&req, "Host")) != NULL);
-    ASSERT(mg_vcmp(v, "127.0.0.1:18888") == 0);
+    ASSERT(vcmp(*v, "127.0.0.1:18888"));
     ASSERT((v = mg_http_get_header(&req, "Cookie")) != NULL);
     ASSERT(v->len == 0);
     ASSERT((v = mg_http_get_header(&req, "X-PlayID")) != NULL);
-    ASSERT(mg_vcmp(v, "45455") == 0);
+    ASSERT(vcmp(*v, "45455"));
     ASSERT((v = mg_http_get_header(&req, "Range")) != NULL);
-    ASSERT(mg_vcmp(v, "0-1") == 0);
+    ASSERT(vcmp(*v, "0-1"));
   }
 
   {
     static const char *s = "a b c\na:1\nb:2\nc:3\nd:4\ne:5\nf:6\ng:7\nh:8\n\n";
     ASSERT(mg_http_parse(s, strlen(s), &req) == (int) strlen(s));
     ASSERT((v = mg_http_get_header(&req, "e")) != NULL);
-    ASSERT(mg_vcmp(v, "5") == 0);
+    ASSERT(vcmp(*v, "5"));
     ASSERT((v = mg_http_get_header(&req, "h")) == NULL);
   }
 
@@ -1580,7 +1609,7 @@ static void test_http_parse(void) {
     s = "a b\nc: \xc0\n\n";  // Invalid UTF in the header value: accept
     ASSERT(mg_http_parse(s, strlen(s), &hm) == (int) strlen(s));
     ASSERT((v = mg_http_get_header(&hm, "c")) != NULL);
-    ASSERT(mg_vcmp(v, "\xc0") == 0);
+    ASSERT(vcmp(*v, "\xc0"));
     s = "a b\n\xc0: 2\n\n";  // Invalid UTF in the header name: do NOT accept
     ASSERT(mg_http_parse(s, strlen(s), &hm) == -1);
   }
@@ -1591,7 +1620,7 @@ static void ehr(struct mg_connection *c, int ev, void *ev_data) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct mg_http_serve_opts opts;
     memset(&opts, 0, sizeof(opts));
-    opts.root_dir = "./test/data";
+    opts.root_dir = "./data";
     mg_http_serve_dir(c, hm, &opts);
   }
 }
@@ -1826,31 +1855,28 @@ static bool chkdbl(struct mg_str s, double val) {
 
 static void test_str(void) {
   {
-    struct mg_str s = mg_strdup(mg_str("a"));
-    ASSERT(mg_strcmp(s, mg_str("a")) == 0);
-    free((void *) s.ptr);
-  }
-
-  {
     const char *s;
     struct mg_str a = mg_str("hello"), b = mg_str("a"), c = mg_str(NULL);
-    ASSERT((s = mg_strstr(a, b)) == NULL);
-    ASSERT((s = mg_strstr(a, c)) != NULL);
-    ASSERT(s == a.ptr);
+    ASSERT((s = mgstrstr(a, b)) == NULL);
+    ASSERT((s = mgstrstr(a, c)) != NULL);
+    ASSERT(s == a.buf);
   }
 
   ASSERT(mg_strcmp(mg_str(""), mg_str(NULL)) == 0);
   ASSERT(mg_strcmp(mg_str("a"), mg_str("b")) < 0);
   ASSERT(mg_strcmp(mg_str("b"), mg_str("a")) > 0);
-  ASSERT(mg_strstr(mg_str("abc"), mg_str("d")) == NULL);
-  ASSERT(mg_strstr(mg_str("abc"), mg_str("b")) != NULL);
-  ASSERT(mg_strcmp(mg_str("hi"), mg_strstrip(mg_str(" \thi\r\n"))) == 0);
+  ASSERT(mg_strcmp(mg_str("hi"), strstrip(mg_str(" \thi\r\n"))) == 0);
 
   ASSERT(sccmp("", "", 0));
   ASSERT(sccmp("", "1", -49));
   ASSERT(sccmp("a", "A", 0));
   ASSERT(sccmp("a1", "A", 49));
   ASSERT(sccmp("a", "A1", -49));
+
+  ASSERT(mg_strcasecmp(mg_str(""), mg_str(NULL)) == 0);
+  ASSERT(mg_strcasecmp(mg_str("a"), mg_str("B")) < 0);
+  ASSERT(mg_strcasecmp(mg_str("b"), mg_str("A")) > 0);
+  ASSERT(mg_strcasecmp(mg_str("hi"), mg_str("HI")) == 0);
 
   {
     ASSERT(chkdbl(mg_str_n("1.23", 3), 1.2));
@@ -2077,20 +2103,22 @@ static void test_str(void) {
     ASSERT(strcmp(buf, "[164:2100:0:0:0:0:0:0]:3 7") == 0);
   }
 
-  ASSERT(mg_path_is_sane(".") == true);
-  ASSERT(mg_path_is_sane("") == true);
-  ASSERT(mg_path_is_sane("a.b") == true);
-  ASSERT(mg_path_is_sane("a..b") == true);
-  ASSERT(mg_path_is_sane(".a") == true);
-  ASSERT(mg_path_is_sane(".a.") == true);
-  ASSERT(mg_path_is_sane("./") == true);
-  ASSERT(mg_path_is_sane("a..") == true);
-  ASSERT(mg_path_is_sane("././a..") == true);
-  ASSERT(mg_path_is_sane("..") == false);
-  ASSERT(mg_path_is_sane("../") == false);
-  ASSERT(mg_path_is_sane("./..") == false);
-  ASSERT(mg_path_is_sane("a/../") == false);
-  ASSERT(mg_path_is_sane("a/../b") == false);
+  ASSERT(mg_path_is_sane(mg_str(".")) == true);
+  ASSERT(mg_path_is_sane(mg_str("")) == true);
+  ASSERT(mg_path_is_sane(mg_str("a.b")) == true);
+  ASSERT(mg_path_is_sane(mg_str("a..b")) == true);
+  ASSERT(mg_path_is_sane(mg_str(".a")) == true);
+  ASSERT(mg_path_is_sane(mg_str(".a.")) == true);
+  ASSERT(mg_path_is_sane(mg_str("./")) == true);
+  ASSERT(mg_path_is_sane(mg_str("a..")) == true);
+  ASSERT(mg_path_is_sane(mg_str("././a..")) == true);
+  ASSERT(mg_path_is_sane(mg_str("..")) == false);
+  ASSERT(mg_path_is_sane(mg_str("../")) == false);
+  ASSERT(mg_path_is_sane(mg_str("./..")) == false);
+  ASSERT(mg_path_is_sane(mg_str("a/../")) == false);
+  ASSERT(mg_path_is_sane(mg_str("a/../b")) == false);
+  ASSERT(mg_path_is_sane(mg_str_n("a/..", 2)) == true);
+  ASSERT(mg_path_is_sane(mg_str_n("a/../b", 2)) == true);
 }
 
 static void fn1(struct mg_connection *c, int ev, void *ev_data) {
@@ -2172,15 +2200,17 @@ static void test_dns(void) {
 
 static void test_util(void) {
   const char *e;
-  char buf[100], *p, *s;
+  char buf[100], *s;
   struct mg_addr a;
   uint32_t ipv4;
+  struct mg_str data;
   memset(&a, 0xa5, sizeof(a));
   ASSERT(mg_file_printf(&mg_fs_posix, "data.txt", "%s", "hi") == true);
   // if (system("ls -l") != 0) (void) 0;
-  ASSERT((p = mg_file_read(&mg_fs_posix, "data.txt", NULL)) != NULL);
-  ASSERT(strcmp(p, "hi") == 0);
-  free(p);
+  data = mg_file_read(&mg_fs_posix, "data.txt");
+  ASSERT(data.buf != NULL);
+  ASSERT(strcmp(data.buf, "hi") == 0);
+  free((void *) data.buf);
   remove("data.txt");
   ASSERT(mg_aton(mg_str("0"), &a) == false);
   ASSERT(mg_aton(mg_str("0.0.0."), &a) == false);
@@ -2234,9 +2264,11 @@ static void test_util(void) {
   e = "\x20\x01\x48\x60\x48\x60\x00\x00\x00\x00\x00\x00\x00\x00\x88\x88";
   ASSERT(memcmp(a.ip, e, sizeof(a.ip)) == 0);
 
-  ASSERT(strcmp(mg_hex("abc", 3, buf), "616263") == 0);
   ASSERT(mg_url_decode("a=%", 3, buf, sizeof(buf), 0) < 0);
   ASSERT(mg_url_decode("&&&a=%", 6, buf, sizeof(buf), 0) < 0);
+  ASSERT(mg_url_decode("a=%1", 4, buf, sizeof(buf), 0) < 0);
+  ASSERT(mg_url_decode("a=%12", 5, buf, sizeof(buf), 0) == 3 && buf[2] == 0x12);
+  ASSERT(mg_url_decode("a=%123", 6, buf, sizeof(buf), 0) == 4 && buf[2] == 0x12 && buf[3] == '3');
 
   memset(a.ip, 0xaa, sizeof(a.ip));
   ASSERT(mg_aton(mg_str("::1%1"), &a) == true);
@@ -2292,6 +2324,70 @@ static void test_util(void) {
   }
 
   {
+    uint64_t val, max = (uint64_t) -1;
+    ASSERT(mg_str_to_num(mg_str("0"), 10, &val, sizeof(uint64_t)) && val == 0);
+    ASSERT(mg_str_to_num(mg_str("123"), 10, &val, sizeof(uint64_t)) && val == 123);
+    ASSERT(mg_str_to_num(mg_str(" 123"), 10, &val, sizeof(uint64_t)) == false);
+    ASSERT(mg_str_to_num(mg_str("123 "), 10, &val, sizeof(uint64_t)) == false);
+    ASSERT(mg_str_to_num(mg_str(""), 10, &val, sizeof(uint64_t)) == false);
+    ASSERT(mg_str_to_num(mg_str(" 123x"), 10, &val, sizeof(uint64_t)) == false);
+    ASSERT(mg_str_to_num(mg_str("-"), 10, &val, sizeof(uint64_t)) == false);
+    mg_snprintf(buf, sizeof(buf), "%llu", max);
+    ASSERT(mg_str_to_num(mg_str(buf), 10, &val, sizeof(uint64_t)) && val == max);
+    ASSERT(mg_str_to_num(mg_str("0"), 2, &val, sizeof(uint64_t)) && val == 0);
+    ASSERT(mg_str_to_num(mg_str("1"), 2, &val, sizeof(uint64_t)) && val == 1);
+    ASSERT(mg_str_to_num(mg_str("0123"), 2, &val, sizeof(uint64_t)) == false);
+    ASSERT(mg_str_to_num(mg_str("123"), 2, &val, sizeof(uint64_t)) == false);
+    ASSERT(mg_str_to_num(mg_str("01111011"), 2, &val, sizeof(uint64_t)) && val == 123);
+    ASSERT(mg_str_to_num(mg_str("1111111111111111111111111111111111111111111111111111111111111111"), 2, &val, sizeof(uint64_t)) && val == max);
+    ASSERT(mg_str_to_num(mg_str("0"), 16, &val, sizeof(uint64_t)) && val == 0);
+    ASSERT(mg_str_to_num(mg_str("123"), 16, &val, sizeof(uint64_t)) && val == 0x123);
+    ASSERT(mg_str_to_num(mg_str("def"), 16, &val, sizeof(uint64_t)) && val == 0xdef);
+    ASSERT(mg_str_to_num(mg_str("defg"), 16, &val, sizeof(uint64_t)) == false);
+    mg_snprintf(buf, sizeof(buf), "%llx", max);
+    ASSERT(mg_str_to_num(mg_str(buf), 16, &val, sizeof(uint64_t)) && val == max);
+    ASSERT(mg_str_to_num(mg_str("0x123"), 0, &val, sizeof(uint64_t)) && val == 0x123);
+    ASSERT(mg_str_to_num(mg_str("0b123"), 0, &val, sizeof(uint64_t)) == false);
+    ASSERT(mg_str_to_num(mg_str("0c123"), 0, &val, sizeof(uint64_t)) == false);
+    ASSERT(mg_str_to_num(mg_str("0b101"), 0, &val, sizeof(uint64_t)) && val == 5);
+    ASSERT(mg_str_to_num(mg_str("0123"), 0, &val, sizeof(uint64_t)) && val == 123);
+  }
+  {
+    uint32_t val, max = (uint32_t) -1;
+    ASSERT(mg_str_to_num(mg_str("123"), 10, &val, sizeof(uint32_t)) && val == 123);
+    mg_snprintf(buf, sizeof(buf), "%lu", max);
+    ASSERT(mg_str_to_num(mg_str(buf), 10, &val, sizeof(uint32_t)) && val == max);
+    ASSERT(mg_str_to_num(mg_str("01111011"), 2, &val, sizeof(uint32_t)) && val == 123);
+    ASSERT(mg_str_to_num(mg_str("11111111111111111111111111111111"), 2, &val, sizeof(uint32_t)) && val == max);
+    ASSERT(mg_str_to_num(mg_str("0"), 16, &val, sizeof(uint32_t)) && val == 0);
+    ASSERT(mg_str_to_num(mg_str("123"), 16, &val, sizeof(uint32_t)) && val == 0x123);
+    mg_snprintf(buf, sizeof(buf), "%lx", max);
+    ASSERT(mg_str_to_num(mg_str(buf), 16, &val, sizeof(uint32_t)) && val == max);
+  }
+  {
+    uint16_t val, max = (uint16_t) -1;
+    ASSERT(mg_str_to_num(mg_str("123"), 10, &val, sizeof(uint16_t)) && val == 123);
+    mg_snprintf(buf, sizeof(buf), "%u", max);
+    ASSERT(mg_str_to_num(mg_str(buf), 10, &val, sizeof(uint16_t)) && val == max);
+    ASSERT(mg_str_to_num(mg_str("01111011"), 2, &val, sizeof(uint16_t)) && val == 123);
+    ASSERT(mg_str_to_num(mg_str("1111111111111111"), 2, &val, sizeof(uint16_t)) && val == max);
+    ASSERT(mg_str_to_num(mg_str("123"), 16, &val, sizeof(uint16_t)) && val == 0x123);
+    mg_snprintf(buf, sizeof(buf), "%x", max);
+    ASSERT(mg_str_to_num(mg_str(buf), 16, &val, sizeof(uint16_t)) && val == max);
+  }
+  {
+    uint8_t val, max = (uint8_t) -1;
+    ASSERT(mg_str_to_num(mg_str("123"), 10, &val, sizeof(uint8_t)) && val == 123);
+    mg_snprintf(buf, sizeof(buf), "%u", max);
+    ASSERT(mg_str_to_num(mg_str(buf), 10, &val, sizeof(uint8_t)) && val == max);
+    ASSERT(mg_str_to_num(mg_str("01111011"), 2, &val, sizeof(uint8_t)) && val == 123);
+    ASSERT(mg_str_to_num(mg_str("11111111"), 2, &val, sizeof(uint8_t)) && val == max);
+    ASSERT(mg_str_to_num(mg_str("12"), 16, &val, sizeof(uint8_t)) && val == 0x12);
+    mg_snprintf(buf, sizeof(buf), "%x", max);
+    ASSERT(mg_str_to_num(mg_str(buf), 16, &val, sizeof(uint8_t)) && val == max);
+  }
+
+  {
     size_t i;
     memset(buf, ' ', sizeof(buf));
     mg_random_str(buf, 0);
@@ -2315,12 +2411,12 @@ static void test_crc32(void) {
 
 static void us(struct mg_connection *c, int ev, void *ev_data) {
   struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-  if (ev == MG_EV_HTTP_MSG && mg_http_match_uri(hm, "/upload")) {
+  if (ev == MG_EV_HTTP_MSG && mg_match(hm->uri, mg_str("/upload"), NULL)) {
     MG_DEBUG(("Got all %lu bytes!", (unsigned long) hm->body.len));
-    MG_DEBUG(("Query string: [%.*s]", (int) hm->query.len, hm->query.ptr));
-    // MG_DEBUG(("Body:\n%.*s", (int) hm->body.len, hm->body.ptr));
+    MG_DEBUG(("Query string: [%.*s]", (int) hm->query.len, hm->query.buf));
+    // MG_DEBUG(("Body:\n%.*s", (int) hm->body.len, hm->body.buf));
     mg_http_reply(c, 200, "", "ok (%d %.*s)\n", (int) hm->body.len,
-                  (int) hm->body.len, hm->body.ptr);
+                  (int) hm->body.len, hm->body.buf);
   } else if (ev == MG_EV_HTTP_MSG) {
     mg_http_reply(c, 200, "", "ok\n");
   }
@@ -2339,7 +2435,7 @@ static void uc(struct mg_connection *c, int ev, void *ev_data) {
     mg_http_printf_chunk(c, "");
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    // MG_INFO(("---> [%s] [%.*s]", *s, hm->body.len, hm->body.ptr));
+    // MG_INFO(("---> [%s] [%.*s]", *s, hm->body.len, hm->body.buf));
     ASSERT(mg_strcmp(hm->body, mg_str(*s)) == 0);
     *s = NULL;
   }
@@ -2408,8 +2504,8 @@ static void eh4(struct mg_connection *c, int ev, void *ev_data) {
   uint32_t *crc = (uint32_t *) c->fn_data;
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    *crc = mg_crc32(*crc, hm->body.ptr, hm->body.len);
-    MG_INFO(("%lu M [%.*s]", c->id, (int) hm->body.len, hm->body.ptr));
+    *crc = mg_crc32(*crc, hm->body.buf, hm->body.len);
+    MG_INFO(("%lu M [%.*s]", c->id, (int) hm->body.len, hm->body.buf));
   }
 }
 
@@ -2569,12 +2665,12 @@ static void test_multipart(void) {
   ASSERT(mg_http_next_multipart(mg_str(""), 0, NULL) == 0);
   ASSERT((ofs = mg_http_next_multipart(mg_str(s), 0, &part)) > 0);
   ASSERT(mg_strcmp(part.name, mg_str("val")) == 0);
-  // MG_INFO(("--> [%.*s]", (int) part.body.len, part.body.ptr));
+  // MG_INFO(("--> [%.*s]", (int) part.body.len, part.body.buf));
   ASSERT(mg_strcmp(part.body, mg_str("abc\r\ndef")) == 0);
   ASSERT(part.filename.len == 0);
   ASSERT((ofs = mg_http_next_multipart(mg_str(s), ofs, &part)) > 0);
   ASSERT(mg_strcmp(part.name, mg_str("foo")) == 0);
-  // MG_INFO(("--> [%.*s]", (int) part.filename.len, part.filename.ptr));
+  // MG_INFO(("--> [%.*s]", (int) part.filename.len, part.filename.buf));
   ASSERT(mg_strcmp(part.filename, mg_str("a b.txt")) == 0);
   ASSERT(mg_strcmp(part.body, mg_str("hello world\r\n")) == 0);
   ASSERT(mg_http_next_multipart(mg_str(s), ofs, &part) == 0);
@@ -2594,8 +2690,8 @@ static void eh7(struct mg_connection *c, int ev, void *ev_data) {
 static void test_packed(void) {
   struct mg_mgr mgr;
   const char *url = "http://127.0.0.1:12351";
-  char buf[FETCH_BUF_SIZE],
-      *data = mg_file_read(&mg_fs_posix, "Makefile", NULL);
+  char buf[FETCH_BUF_SIZE];
+  struct mg_str data = mg_file_read(&mg_fs_posix, "Makefile");
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, url, eh7, NULL);
 
@@ -2603,22 +2699,22 @@ static void test_packed(void) {
   // fetch(&mgr, buf, url, "GET /Makefile HTTP/1.0\n\n");
   // printf("---> %s\n", buf);
   ASSERT(fetch(&mgr, buf, url, "GET /Makefile HTTP/1.0\n\n") == 200);
-  ASSERT(cmpbody(buf, data) == 0);
-  free(data);
+  ASSERT(cmpbody(buf, data.buf) == 0);
+  free((void *) data.buf);
 
   // Load file deeper in the FS tree directly
-  data = mg_file_read(&mg_fs_posix, "src/ssi.h", NULL);
-  ASSERT(fetch(&mgr, buf, url, "GET /src/ssi.h HTTP/1.0\n\n") == 200);
-  ASSERT(cmpbody(buf, data) == 0);
-  free(data);
+  data = mg_file_read(&mg_fs_posix, "data/ssi.h");
+  ASSERT(fetch(&mgr, buf, url, "GET /data/ssi.h HTTP/1.0\n\n") == 200);
+  ASSERT(cmpbody(buf, data.buf) == 0);
+  free((void *) data.buf);
 
   // List root dir
   ASSERT(fetch(&mgr, buf, url, "GET / HTTP/1.0\n\n") == 200);
   // printf("--------\n%s\n", buf);
 
   // List nested dir
-  ASSERT(fetch(&mgr, buf, url, "GET /test HTTP/1.0\n\n") == 301);
-  ASSERT(fetch(&mgr, buf, url, "GET /test/ HTTP/1.0\n\n") == 200);
+  ASSERT(fetch(&mgr, buf, url, "GET /data HTTP/1.0\n\n") == 301);
+  ASSERT(fetch(&mgr, buf, url, "GET /data/ HTTP/1.0\n\n") == 200);
   // printf("--------\n%s\n", buf);
 
   mg_mgr_free(&mgr);
@@ -2710,7 +2806,7 @@ static void w2(struct mg_connection *c, int ev, void *ev_data) {
       uint8_t op = n == 0 ? WEBSOCKET_OP_TEXT : WEBSOCKET_OP_CONTINUE;
       mg_ws_send(c, ":->", 3, WEBSOCKET_OP_PING);
       ofs = c->send.len;
-      mg_ws_send(c, &msg.ptr[n], 1, op);
+      mg_ws_send(c, &msg.buf[n], 1, op);
       if (n < msg.len - 1) c->send.buf[ofs] = op;  // Clear FIN flag
       c->fn_data = (void *) (n + 1);               // Point to the next char
     } else {
@@ -2719,7 +2815,7 @@ static void w2(struct mg_connection *c, int ev, void *ev_data) {
   } else if (ev == MG_EV_WS_MSG) {
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
     MG_INFO(("Got WS, %lu", wm->data.len));
-    // mg_hexdump(wm->data.ptr, wm->data.len);
+    // mg_hexdump(wm->data.buf, wm->data.len);
     if (wm->data.len == 9) {
       ASSERT(mg_strcmp(wm->data, mg_str("hi there!")) == 0);
     } else if (wm->data.len == 10) {
@@ -2754,7 +2850,7 @@ static void h7(struct mg_connection *c, int ev, void *ev_data) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct mg_http_serve_opts opts;
     memset(&opts, 0, sizeof(opts));
-    opts.root_dir = "./test/data,/foo=./src";
+    opts.root_dir = "./data,/foo=./dirtest";
     mg_http_serve_dir(c, hm, &opts);
   }
 }
@@ -2796,15 +2892,15 @@ static void test_get_header_var(void) {
 static void json_scan(struct mg_str json, int depth) {
   int i, n = 0, o = mg_json_get(json, "$", &n);
   for (i = 0; i < depth; i++) printf("  ");
-  printf("%.*s\n", n, json.ptr + o);
-  if (json.ptr[o] == '{' || json.ptr[o] == '[') {  // Iterate over elems
-    struct mg_str key, val, sub = mg_str_n(json.ptr + o, (size_t) n);
+  printf("%.*s\n", n, json.buf + o);
+  if (json.buf[o] == '{' || json.buf[o] == '[') {  // Iterate over elems
+    struct mg_str key, val, sub = mg_str_n(json.buf + o, (size_t) n);
     size_t ofs = 0;
     while ((ofs = mg_json_next(sub, ofs, &key, &val)) > 0) {
       for (i = 0; i < depth; i++) printf("  ");
-      printf("KEY: %.*s VAL: %.*s\n", (int) key.len, key.ptr, (int) val.len,
-             val.ptr);
-      if (*val.ptr == '[' || *val.ptr == '{') json_scan(val, depth + 1);
+      printf("KEY: %.*s VAL: %.*s\n", (int) key.len, key.buf, (int) val.len,
+             val.buf);
+      if (*val.buf == '[' || *val.buf == '{') json_scan(val, depth + 1);
     }
   }
 }
@@ -2886,6 +2982,17 @@ static void test_json(void) {
   ASSERT(mg_json_get(json, "$.a.b", &n) == MG_JSON_NOT_FOUND);
   ASSERT(mg_json_get(json, "$.a1", &n) == MG_JSON_NOT_FOUND);
   ASSERT(mg_json_get(json, "$.c", &n) == 19 && n == 1);
+
+  {
+    char to[4], expect[4] = {0,0,0,0};
+    memset(to, 0, sizeof(to));
+    ASSERT(mg_json_unescape(mg_str("\\u0000"), to, 4) && memcmp(to, expect, 4) == 0);
+    to[0] = 0;
+    expect[0] = (char) 0xff;
+    ASSERT(mg_json_unescape(mg_str("\\u00ff"), to, 4) && memcmp(to, expect, 4) == 0);
+    ASSERT(!mg_json_unescape(mg_str("\\u0100"), to, 4));
+    ASSERT(!mg_json_unescape(mg_str("\\u1000"), to, 4));
+  }
 
   {
     double d = 0;
@@ -2995,21 +3102,28 @@ static void test_json(void) {
   json = mg_str("[1,true,{\"a\":[3],\"b\":42}]");
   json_scan(json, 0);
   {
-    struct mg_str k, v, sub = mg_str_n(json.ptr + 8, json.len - 8);
+    struct mg_str k, v, sub = mg_str_n(json.buf + 8, json.len - 8);
     const char *a = "\"a\"", *b = "\"b\"";
     ASSERT(mg_json_next(sub, 0, &k, &v) == 9);
-    ASSERT(mg_vcmp(&k, a) == 0);
-    ASSERT(mg_vcmp(&v, "[3]") == 0);
+    ASSERT(vcmp(k, a));
+    ASSERT(vcmp(v, "[3]"));
     ASSERT(mg_json_next(sub, 9, &k, &v) == 15);
-    ASSERT(mg_vcmp(&k, b) == 0);
-    ASSERT(mg_vcmp(&v, "42") == 0);
+    ASSERT(vcmp(k, b));
+    ASSERT(vcmp(v, "42"));
     ASSERT(mg_json_next(sub, 15, &k, &v) == 0);
+  }
+
+  {
+    struct mg_str expected = mg_str("\"b:c\""), val;
+    json = mg_str("{\"a\":\"b:c\"}");
+    val = mg_json_get_tok(json, "$.a");
+    ASSERT(mg_strcmp(val, expected) == 0);
   }
 }
 
 static void resp_rpc(struct mg_rpc_req *r) {
   int len = 0, off = mg_json_get(r->frame, "$.result", &len);
-  mg_xprintf(r->pfn, r->pfn_data, "%.*s", len, &r->frame.ptr[off]);
+  mg_xprintf(r->pfn, r->pfn_data, "%.*s", len, &r->frame.buf[off]);
 }
 
 static void test_rpc(void) {
@@ -3281,17 +3395,31 @@ static void test_split(void) {
   ASSERT(mg_strcmp(b, mg_str("")) == 0);
 }
 
+static void test_crypto(void) {
+  uint8_t key[X25519_BYTES];
+  uint8_t buf[X25519_BYTES];
+  char tmp[100];
+  size_t i;
+  for (i = 0; i < sizeof(key); i++) key[i] = (uint8_t) i;
+  for (i = 0; i < sizeof(buf); i++) buf[i] = 0;
+  mg_tls_x25519(buf, key, X25519_BASE_POINT, 1);
+  mg_snprintf(tmp, sizeof(tmp), "%M", mg_print_hex, sizeof(buf), buf);
+  MG_INFO(("%s", tmp));
+  ASSERT(mg_strcmp(mg_str("8f40c5adb6"), mg_str_n(tmp, 10)) == 0);
+}
+
 int main(void) {
   const char *debug_level = getenv("V");
   if (debug_level == NULL) debug_level = "3";
   mg_log_set(atoi(debug_level));
 
+  test_crypto();
   test_split();
   test_json();
   test_queue();
   test_rpc();
   test_str();
-  test_globmatch();
+  test_match();
   test_get_header_var();
   test_http_parse();
   test_rewrites();
@@ -3311,18 +3439,21 @@ int main(void) {
   test_iobuf();
   test_base64();
   test_http_get_var();
-  test_http_client();
   test_tls();
   test_ws();
   test_ws_fragmentation();
-  test_host_validation();
   test_http_server();
   test_http_404();
   test_http_no_content_length();
   test_http_pipeline();
   test_http_range();
+#ifndef LOCALHOST_ONLY
   test_sntp();
   test_mqtt();
+  test_http_client();
+#else
+  (void) test_sntp, (void) test_mqtt, (void) test_http_client;
+#endif
   test_poll();
   test_md5();
   test_sha1();

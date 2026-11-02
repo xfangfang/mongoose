@@ -1,7 +1,8 @@
 #include "printf.h"
 #include "tls.h"
 
-#if MG_TLS == MG_TLS_OPENSSL
+#if MG_TLS == MG_TLS_OPENSSL || MG_TLS == MG_TLS_WOLFSSL
+
 static int tls_err_cb(const char *s, size_t len, void *c) {
   int n = (int) len - 1;
   MG_ERROR(("%lu %.*s", ((struct mg_connection *) c)->id, n, s));
@@ -27,7 +28,7 @@ static int mg_tls_err(struct mg_connection *c, struct mg_tls *tls, int res) {
 }
 
 static STACK_OF(X509_INFO) * load_ca_certs(struct mg_str ca) {
-  BIO *bio = BIO_new_mem_buf(ca.ptr, (int) ca.len);
+  BIO *bio = BIO_new_mem_buf(ca.buf, (int) ca.len);
   STACK_OF(X509_INFO) *certs =
       bio ? PEM_X509_INFO_read_bio(bio, NULL, NULL, NULL) : NULL;
   if (bio) BIO_free(bio);
@@ -45,29 +46,30 @@ static bool add_ca_certs(SSL_CTX *ctx, STACK_OF(X509_INFO) * certs) {
 }
 
 static EVP_PKEY *load_key(struct mg_str s) {
-  BIO *bio = BIO_new_mem_buf(s.ptr, (int) (long) s.len);
+  BIO *bio = BIO_new_mem_buf(s.buf, (int) (long) s.len);
   EVP_PKEY *key = bio ? PEM_read_bio_PrivateKey(bio, NULL, 0, NULL) : NULL;
   if (bio) BIO_free(bio);
   return key;
 }
 
 static X509 *load_cert(struct mg_str s) {
-  BIO *bio = BIO_new_mem_buf(s.ptr, (int) (long) s.len);
+  BIO *bio = BIO_new_mem_buf(s.buf, (int) (long) s.len);
   X509 *cert = bio == NULL ? NULL
-               : s.ptr[0] == '-'
+               : s.buf[0] == '-'
                    ? PEM_read_bio_X509(bio, NULL, NULL, NULL)  // PEM
                    : d2i_X509_bio(bio, NULL);                  // DER
   if (bio) BIO_free(bio);
   return cert;
 }
 
-
 static long mg_bio_ctrl(BIO *b, int cmd, long larg, void *pargs) {
   long ret = 0;
   if (cmd == BIO_CTRL_PUSH) ret = 1;
   if (cmd == BIO_CTRL_POP) ret = 1;
   if (cmd == BIO_CTRL_FLUSH) ret = 1;
+#if MG_TLS == MG_TLS_OPENSSL
   if (cmd == BIO_C_SET_NBIO) ret = 1;
+#endif
   // MG_DEBUG(("%d -> %ld", cmd, ret));
   (void) b, (void) cmd, (void) larg, (void) pargs;
   return ret;
@@ -128,7 +130,14 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   SSL_set_options(tls->ssl, SSL_OP_CIPHER_SERVER_PREFERENCE);
 #endif
 
-  if (opts->ca.ptr != NULL && opts->ca.ptr[0] != '\0') {
+#if MG_TLS == MG_TLS_WOLFSSL && !defined(OPENSSL_COMPATIBLE_DEFAULTS)
+  if (opts->ca.len == 0 || mg_strcmp(opts->ca, mg_str("*")) == 0) {
+    // Older versions require that either the CA is loaded or SSL_VERIFY_NONE
+    // explicitly set
+    SSL_set_verify(tls->ssl, SSL_VERIFY_NONE, NULL);
+  }
+#endif
+  if (opts->ca.buf != NULL && opts->ca.buf[0] != '\0') {
     SSL_set_verify(tls->ssl, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
                    NULL);
     STACK_OF(X509_INFO) *certs = load_ca_certs(opts->ca);
@@ -139,7 +148,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
       goto fail;
     }
   }
-  if (opts->cert.ptr != NULL && opts->cert.ptr[0] != '\0') {
+  if (opts->cert.buf != NULL && opts->cert.buf[0] != '\0') {
     X509 *cert = load_cert(opts->cert);
     rc = cert == NULL ? 0 : SSL_use_certificate(tls->ssl, cert);
     X509_free(cert);
@@ -148,7 +157,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
       goto fail;
     }
   }
-  if (opts->key.ptr != NULL && opts->key.ptr[0] != '\0') {
+  if (opts->key.buf != NULL && opts->key.buf[0] != '\0') {
     EVP_PKEY *key = load_key(opts->key);
     rc = key == NULL ? 0 : SSL_use_PrivateKey(tls->ssl, key);
     EVP_PKEY_free(key);
@@ -159,19 +168,26 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   }
 
   SSL_set_mode(tls->ssl, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
-#if OPENSSL_VERSION_NUMBER > 0x10002000L
+#if MG_TLS == MG_TLS_OPENSSL && OPENSSL_VERSION_NUMBER > 0x10002000L
   (void) SSL_set_ecdh_auto(tls->ssl, 1);
 #endif
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
   if (opts->name.len > 0) {
-    char *s = mg_mprintf("%.*s", (int) opts->name.len, opts->name.ptr);
+    char *s = mg_mprintf("%.*s", (int) opts->name.len, opts->name.buf);
+#if MG_TLS != MG_TLS_WOLFSSL || LIBWOLFSSL_VERSION_HEX >= 0x05005002
     SSL_set1_host(tls->ssl, s);
+#else
+    X509_VERIFY_PARAM_set1_host(SSL_get0_param(tls->ssl), s, 0);
+#endif
     SSL_set_tlsext_host_name(tls->ssl, s);
     free(s);
   }
 #endif
-
+#if MG_TLS == MG_TLS_WOLFSSL
+  tls->bm = BIO_meth_new(0, "bio_mg");
+#else
   tls->bm = BIO_meth_new(BIO_get_new_index() | BIO_TYPE_SOURCE_SINK, "bio_mg");
+#endif
   BIO_meth_set_write(tls->bm, mg_bio_write);
   BIO_meth_set_read(tls->bm, mg_bio_read);
   BIO_meth_set_ctrl(tls->bm, mg_bio_ctrl);

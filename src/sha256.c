@@ -1,3 +1,9 @@
+// https://github.com/B-Con/crypto-algorithms
+// Author:     Brad Conte (brad AT bradconte.com)
+// Disclaimer: This code is presented "as is" without any guarantees.
+// Details:    Defines the API for the corresponding SHA1 implementation.
+// Copyright:  public domain
+
 #include "sha256.h"
 
 #define ror(x, n) (((x) >> (n)) | ((x) << (32 - (n))))
@@ -39,8 +45,10 @@ static void mg_sha256_chunk(mg_sha256_ctx *ctx) {
   uint32_t a, b, c, d, e, f, g, h;
   uint32_t m[64];
   for (i = 0, j = 0; i < 16; ++i, j += 4)
-    m[i] = (uint32_t) ((ctx->buffer[j] << 24) | (ctx->buffer[j + 1] << 16) |
-                       (ctx->buffer[j + 2] << 8) | (ctx->buffer[j + 3]));
+    m[i] = (uint32_t) (((uint32_t) ctx->buffer[j] << 24) |
+                       ((uint32_t) ctx->buffer[j + 1] << 16) |
+                       ((uint32_t) ctx->buffer[j + 2] << 8) |
+                       ((uint32_t) ctx->buffer[j + 3]));
   for (; i < 64; ++i)
     m[i] = sig1(m[i - 2]) + m[i - 7] + sig0(m[i - 15]) + m[i - 16];
 
@@ -118,14 +126,14 @@ void mg_sha256_final(unsigned char digest[32], mg_sha256_ctx *ctx) {
   mg_sha256_chunk(ctx);
 
   for (i = 0; i < 4; ++i) {
-    digest[i] = (ctx->state[0] >> (24 - i * 8)) & 0xff;
-    digest[i + 4] = (ctx->state[1] >> (24 - i * 8)) & 0xff;
-    digest[i + 8] = (ctx->state[2] >> (24 - i * 8)) & 0xff;
-    digest[i + 12] = (ctx->state[3] >> (24 - i * 8)) & 0xff;
-    digest[i + 16] = (ctx->state[4] >> (24 - i * 8)) & 0xff;
-    digest[i + 20] = (ctx->state[5] >> (24 - i * 8)) & 0xff;
-    digest[i + 24] = (ctx->state[6] >> (24 - i * 8)) & 0xff;
-    digest[i + 28] = (ctx->state[7] >> (24 - i * 8)) & 0xff;
+    digest[i] = (uint8_t) ((ctx->state[0] >> (24 - i * 8)) & 0xff);
+    digest[i + 4] = (uint8_t) ((ctx->state[1] >> (24 - i * 8)) & 0xff);
+    digest[i + 8] = (uint8_t) ((ctx->state[2] >> (24 - i * 8)) & 0xff);
+    digest[i + 12] = (uint8_t) ((ctx->state[3] >> (24 - i * 8)) & 0xff);
+    digest[i + 16] = (uint8_t) ((ctx->state[4] >> (24 - i * 8)) & 0xff);
+    digest[i + 20] = (uint8_t) ((ctx->state[5] >> (24 - i * 8)) & 0xff);
+    digest[i + 24] = (uint8_t) ((ctx->state[6] >> (24 - i * 8)) & 0xff);
+    digest[i + 28] = (uint8_t) ((ctx->state[7] >> (24 - i * 8)) & 0xff);
   }
 }
 
@@ -138,7 +146,7 @@ void mg_hmac_sha256(uint8_t dst[32], uint8_t *key, size_t keysz, uint8_t *data,
   memset(i_pad, 0x36, sizeof(i_pad));
   memset(o_pad, 0x5c, sizeof(o_pad));
   if (keysz < 64) {
-    memmove(k, key, keysz);
+    if (keysz > 0) memmove(k, key, keysz);
   } else {
     mg_sha256_init(&ctx);
     mg_sha256_update(&ctx, key, keysz);
@@ -157,4 +165,3 @@ void mg_hmac_sha256(uint8_t dst[32], uint8_t *key, size_t keysz, uint8_t *data,
   mg_sha256_update(&ctx, dst, 32);
   mg_sha256_final(dst, &ctx);
 }
-

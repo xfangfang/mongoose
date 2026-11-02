@@ -22,25 +22,21 @@ void mg_fs_close(struct mg_fd *fd) {
   }
 }
 
-char *mg_file_read(struct mg_fs *fs, const char *path, size_t *sizep) {
-  struct mg_fd *fd;
-  char *data = NULL;
-  size_t size = 0;
-  fs->st(path, &size, NULL);
-  if ((fd = mg_fs_open(fs, path, MG_FS_READ)) != NULL) {
-    data = (char *) calloc(1, size + 1);
-    if (data != NULL) {
-      if (fs->rd(fd->fd, data, size) != size) {
-        free(data);
-        data = NULL;
-      } else {
-        data[size] = '\0';
-        if (sizep != NULL) *sizep = size;
-      }
+struct mg_str mg_file_read(struct mg_fs *fs, const char *path) {
+  struct mg_str result = {NULL, 0};
+  void *fp;
+  fs->st(path, &result.len, NULL);
+  if ((fp = fs->op(path, MG_FS_READ)) != NULL) {
+    result.buf = (char *) calloc(1, result.len + 1);
+    if (result.buf != NULL &&
+        fs->rd(fp, (void *) result.buf, result.len) != result.len) {
+      free((void *) result.buf);
+      result.buf = NULL;
     }
-    mg_fs_close(fd);
+    fs->cl(fp);
   }
-  return data;
+  if (result.buf == NULL) result.len = 0;
+  return result;
 }
 
 bool mg_file_write(struct mg_fs *fs, const char *path, const void *buf,
@@ -81,10 +77,10 @@ bool mg_file_printf(struct mg_fs *fs, const char *path, const char *fmt, ...) {
 //        ...
 static void mg_fs_ls_fn(const char *filename, void *param) {
   struct mg_str *s = (struct mg_str *) param;
-  if (s->ptr[0] == '\0') {
-    mg_snprintf((char *) s->ptr, s->len, "%s", filename);
-  } else if (strcmp(s->ptr, filename) == 0) {
-    ((char *) s->ptr)[0] = '\0';  // Fetch next file
+  if (s->buf[0] == '\0') {
+    mg_snprintf((char *) s->buf, s->len, "%s", filename);
+  } else if (strcmp(s->buf, filename) == 0) {
+    ((char *) s->buf)[0] = '\0';  // Fetch next file
   }
 }
 
